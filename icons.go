@@ -45,6 +45,8 @@ var (
 	iconWidthFull   = icon(`<rect width="20" height="16" x="2" y="4" rx="2"/><path d="M5 9h14"/><path d="M5 12h14"/><path d="M5 15h14"/><path d="m4 12 1.5-1.5"/><path d="m20 12-1.5-1.5"/>`)
 	iconTextSmaller = icon(`<path d="M3.5 13h6"/><path d="m2 16 4.5-9 4.5 9"/><path d="M18 7v9"/><path d="m14 12 4 4 4-4"/>`)
 	iconTextLarger  = icon(`<path d="M3.5 13h6"/><path d="m2 16 4.5-9 4.5 9"/><path d="M18 16V7"/><path d="m14 11 4-4 4 4"/>`)
+	iconZoomIn      = icon(`<circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y1="21" y2="16.65"/><line x1="11" x2="11" y1="8" y2="14"/><line x1="8" x2="14" y1="11" y2="11"/>`)
+	iconZoomOut     = icon(`<circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y1="21" y2="16.65"/><line x1="8" x2="14" y1="11" y2="11"/>`)
 	iconCheckCircle = icon(`<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>`)
 	iconSparkle     = icon(`<path d="M12 3v3"/><path d="M12 18v3"/><path d="M3 12h3"/><path d="M18 12h3"/><path d="m5.6 5.6 2.1 2.1"/><path d="m16.3 16.3 2.1 2.1"/><path d="m5.6 18.4 2.1-2.1"/><path d="m16.3 7.7 2.1-2.1"/>`)
 	iconPlus        = icon(`<path d="M5 12h14"/><path d="M12 5v14"/>`)

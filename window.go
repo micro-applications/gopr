@@ -128,7 +128,9 @@ type window struct {
 	// pictures, for the clone and the head in mdOptsFor.
 	mdSource map[string]bool
 	// mermaid are the Mermaid diagrams of the previews, laid out or being.
-	mermaid   map[mermaidKey]*mermaidDiagram
+	mermaid map[mermaidKey]*mermaidDiagram
+	// viewer shows a diagram over the window, to zoom.
+	viewer    *mermaidViewer
 	mdOpts    map[string]*markdown.Options
 	mdOptsFor string
 	// The revisions of the old and the new side of the last load; "" is
@@ -436,7 +438,7 @@ func (w *window) switchTo(src source) {
 	// The filter, of the other source's files, would hide the new ones.
 	w.filter = ""
 	w.fileTabs, w.activeTab = nil, 0
-	w.mdSource, w.mdOpts = nil, nil
+	w.mdSource, w.mdOpts, w.viewer = nil, nil, nil
 	w.hscroll = map[string]float32{}
 	w.current = 0
 	if w.win != nil && w.repo != nil {

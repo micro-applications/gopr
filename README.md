@@ -40,7 +40,10 @@ your disk, or clones it, and shows the pull request there.
   as diagrams — all 33 of Mermaid's types — laid out by
   [pele-go](https://github.com/Broderick-Westrope/pele-go) and drawn
   natively, in the app's fonts and light or dark colors. A block that does
-  not parse shows its source and the error.
+  not parse shows its source and the error. Click a diagram to open it over
+  the window, fitted to it: zoom from 25% to 600% with the toolbar or
+  <kbd>+</kbd>, <kbd>-</kbd>, <kbd>0</kbd> (actual size) and <kbd>F</kbd>
+  (fit), pan by dragging or scrolling, and close it with <kbd>Esc</kbd>.
 - **Viewed files**: marking a file viewed collapses it, and it opens again
   once it changes. Generated files (lockfiles, `*.min.js`,
   `linguist-generated`, …) and dependency folders start collapsed.

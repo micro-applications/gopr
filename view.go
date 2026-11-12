@@ -55,6 +55,7 @@ func (w *window) view(c *ui.Context) {
 	w.palette(c)
 	w.sourceDialog(c)
 	w.shortcutsHelp(c)
+	w.mermaidViewerView(c, pal)
 	w.reviewDialog(c)
 	if w.discarding != nil {
 		open := true

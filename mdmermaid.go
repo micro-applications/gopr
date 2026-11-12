@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"math"
 	"sync"
 
 	"github.com/egoist/godiff/internal/mermaid"
@@ -26,6 +27,9 @@ type mermaidDiagram struct {
 	shapes  *ui.SVG
 	labels  []mermaidLabel
 	codeFam string
+	// scaled are the labels shaped at the scales drawn other than 1, by the
+	// scale in hundredths: glyphs scaled as images would blur.
+	scaled map[int][]mermaidLabel
 }
 
 // mermaidLabel is a label shaped to draw.
@@ -170,10 +174,17 @@ func (m *mermaidDiagram) prepare(d *mermaid.Diagram) error {
 		return err
 	}
 	m.d, m.shapes = d, shapes
-	for _, l := range d.Labels {
+	m.labels = m.shape(1)
+	return nil
+}
+
+// shape shapes the labels at scale s.
+func (m *mermaidDiagram) shape(s float32) []mermaidLabel {
+	var labels []mermaidLabel
+	for _, l := range m.d.Labels {
 		ml := mermaidLabel{Label: l}
 		for _, r := range l.Runs {
-			gs := ui.Shape(r.Text, mermaidFont(r.Size, r.Weight, r.Italic, r.Mono, m.codeFam))
+			gs := ui.Shape(r.Text, mermaidFont(r.Size*float64(s), r.Weight, r.Italic, r.Mono, m.codeFam))
 			color := ui.Hex(r.Fill)
 			if r.Opacity < 1 {
 				color = color.Alpha(float32(r.Opacity))
@@ -181,42 +192,68 @@ func (m *mermaidDiagram) prepare(d *mermaid.Diagram) error {
 			ml.runs = append(ml.runs, mermaidRun{glyphs: gs, x: ml.width, color: color})
 			ml.width += glyphsWidth(gs)
 		}
-		m.labels = append(m.labels, ml)
+		labels = append(labels, ml)
 	}
-	return nil
+	return labels
+}
+
+// labelsAt returns the labels shaped at scale s, kept for the next frames.
+func (m *mermaidDiagram) labelsAt(s float32) []mermaidLabel {
+	k := int(math.Round(float64(s) * 100))
+	if k == 100 {
+		return m.labels
+	}
+	if l, ok := m.scaled[k]; ok {
+		return l
+	}
+	if m.scaled == nil || len(m.scaled) >= 16 {
+		m.scaled = map[int][]mermaidLabel{}
+	}
+	l := m.shape(float32(k) / 100)
+	m.scaled[k] = l
+	return l
 }
 
 // mermaidView draws a diagram at its size, or narrower to fit, its labels
-// over its shapes.
+// over its shapes; a click shows it in the viewer.
 func (w *window) mermaidView(c *ui.Context, m *mermaidDiagram) {
-	d := m.d
-	width, height := float32(d.Width), float32(d.Height)
+	width, height := float32(m.d.Width), float32(m.d.Height)
 	ui.Row(c).Justify(ui.Center).Children(func() {
-		ui.Box(c).Width(width).Shrink(1).MinWidth(0).AspectRatio(width / height).Label("Mermaid diagram").
-			Draw(func(p *ui.Painter, r ui.Rect) {
-				p.Image(m.shapes, r, ui.Contain)
-				s := r.W / width
-				p.Transform(ui.Scaling(s, s), r.X, r.Y, func() {
-					for _, l := range m.labels {
-						x, y := r.X+float32(l.X), r.Y+float32(l.Y)
-						switch l.Anchor {
-						case mermaid.Middle:
-							x -= l.width / 2
-						case mermaid.End:
-							x -= l.width
-						}
-						draw := func() {
-							for _, run := range l.runs {
-								p.Glyphs(run.glyphs, x+run.x, y, run.color)
-							}
-						}
-						if l.Angle != 0 {
-							p.Transform(ui.Rotation(float32(l.Angle)), r.X+float32(l.X), r.Y+float32(l.Y), draw)
-						} else {
-							draw()
-						}
-					}
-				})
-			})
+		box := ui.Box(c).Width(width).Shrink(1).MinWidth(0).AspectRatio(width / height).
+			Label("Mermaid diagram").Tooltip("Open the diagram to zoom").Cursor(ui.CursorPointer).
+			Draw(func(p *ui.Painter, r ui.Rect) { drawMermaid(p, m, r) })
+		if box.Clicked() {
+			w.openMermaid(m)
+		}
 	})
+}
+
+// drawMermaid draws a diagram in r, scaled to its width: the shapes as
+// vectors, the labels shaped at the scale, for sharp text.
+func drawMermaid(p *ui.Painter, m *mermaidDiagram, r ui.Rect) {
+	p.Image(m.shapes, r, ui.Contain)
+	s := r.W / float32(m.d.Width)
+	labels := m.labelsAt(s)
+	// The labels are shaped at a scale rounded to hundredths.
+	k := float32(math.Round(float64(s)*100)) / 100
+	for _, l := range labels {
+		ax, ay := r.X+float32(l.X)*s, r.Y+float32(l.Y)*s
+		x := ax
+		switch l.Anchor {
+		case mermaid.Middle:
+			x -= l.width / 2 * s / k
+		case mermaid.End:
+			x -= l.width * s / k
+		}
+		draw := func() {
+			for _, run := range l.runs {
+				p.Glyphs(run.glyphs, x+run.x*s/k, ay, run.color)
+			}
+		}
+		if l.Angle != 0 {
+			p.Transform(ui.Rotation(float32(l.Angle)), ax, ay, draw)
+		} else {
+			draw()
+		}
+	}
 }
