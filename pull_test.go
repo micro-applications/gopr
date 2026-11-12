@@ -481,33 +481,6 @@ func TestAIReview(t *testing.T) {
 	}
 }
 
-func TestParsePullArgs(t *testing.T) {
-	dir := testRepo(t)
-	gitIn(t, dir, "remote", "add", "origin", "git@github.com:acme/app.git")
-	gitIn(t, dir, "remote", "add", "upstream", "https://github.com/up/app.git")
-	for _, tc := range []struct {
-		args []string
-		want string
-	}{
-		{[]string{"acme/app#5"}, "acme/app#5"},
-		{[]string{"https://github.com/acme/app/pull/7/files"}, "acme/app#7"},
-		{[]string{"--pr", "12"}, "up/app#12"},
-		{[]string{"#3"}, "up/app#3"},
-	} {
-		req, err := parseArgs(tc.args, dir)
-		if err != nil {
-			t.Errorf("%v: %v", tc.args, err)
-			continue
-		}
-		if req.src != (source{kind: sourcePull, ref: tc.want}) {
-			t.Errorf("%v: %+v", tc.args, req.src)
-		}
-	}
-	if _, err := parseArgs([]string{"other/thing#1"}, dir); err == nil || !strings.Contains(err.Error(), "no remote of other/thing") {
-		t.Errorf("another repository: %v", err)
-	}
-}
-
 func TestAIModelMenu(t *testing.T) {
 	w, tt := newTestWindow(t, testRepo(t))
 	// The models OpenCode lists, as if it had listed them.

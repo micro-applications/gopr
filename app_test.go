@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/egoist/godiff/internal/git"
+	"github.com/egoist/godiff/internal/github"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -386,31 +387,38 @@ func TestImage(t *testing.T) {
 }
 
 func TestParseArgs(t *testing.T) {
-	dir := testRepo(t)
-	gitIn(t, dir, "branch", "feature")
+	acme := github.Repo{Owner: "acme", Name: "api"}
 	for _, tc := range []struct {
 		args []string
-		want source
-		dir  string
+		want request
 	}{
-		{nil, source{}, dir},
-		{[]string{"HEAD"}, source{kind: sourceCommit, ref: "HEAD"}, dir},
-		{[]string{"feature"}, source{kind: sourceBranch, ref: "feature"}, dir},
-		{[]string{"--commit", "main"}, source{kind: sourceCommit, ref: "main"}, dir},
-		{[]string{"docs"}, source{}, filepath.Join(dir, "docs")},
-		{[]string{"HEAD~0", "./docs"}, source{kind: sourceCommit, ref: "HEAD~0"}, filepath.Join(dir, "docs")},
+		{nil, request{}},
+		{[]string{"acme/api#4"}, request{acme, 4}},
+		{[]string{"https://github.com/acme/api/pull/4"}, request{acme, 4}},
+		{[]string{"https://github.com/acme/api/pull/4/files"}, request{acme, 4}},
 	} {
-		req, err := parseArgs(tc.args, dir)
-		if err != nil {
-			t.Errorf("%v: %v", tc.args, err)
-			continue
-		}
-		if req.src != tc.want || req.dir != tc.dir {
-			t.Errorf("%v: got %+v in %s", tc.args, req.src, req.dir)
+		req, err := parseArgs(tc.args)
+		if err != nil || req != tc.want {
+			t.Errorf("%v: got %+v, %v", tc.args, req, err)
 		}
 	}
-	if _, err := parseArgs([]string{"nonexistent-ref"}, dir); err == nil {
-		t.Error("no error for an unknown ref")
+	for _, args := range [][]string{{"HEAD~1"}, {"#4"}, {"a", "b"}, {"acme/api#4", "acme/api#5"}, {"--cwd", "/x"}} {
+		if _, err := parseArgs(args); err == nil {
+			t.Errorf("%v: error %v", args, err)
+		}
+	}
+	if _, err := parseArgs([]string{"--help"}); err != errHelp {
+		t.Errorf("--help: %v", err)
+	}
+}
+
+func TestCLIName(t *testing.T) {
+	if cliName != "gopr" {
+		t.Errorf("cliName %q", cliName)
+	}
+	s := cliScript()
+	if !strings.Contains(s, "# Opens GoPR") || strings.Contains(s, "--cwd") {
+		t.Errorf("script %q", s)
 	}
 }
 

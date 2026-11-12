@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -9,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/egoist/godiff/internal/git"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -447,30 +445,4 @@ func (w *window) shortcuts(c *ui.Context, reviewBuilt bool) {
 	if c.Shortcut(ui.Shift, ui.KeySlash) {
 		w.help = true
 	}
-}
-
-// welcome is the window shown without a repository.
-type welcome struct {
-	err error
-}
-
-func (v *welcome) view(c *ui.Context) {
-	t := c.Theme()
-	pal := paletteFor(t)
-	c.Root().Background(pal.appBg)
-	bar := c.TitleBar()
-	ui.Box(c).Height(max(bar.Height, 40)).DragWindow().FillWidth()
-	title := "Open a Git repository"
-	detail := "Run godiff from a Git repository in Terminal, or open one."
-	if v.err != nil && !errors.Is(v.err, git.ErrNotRepository) {
-		title, detail = "Unable to read repository", errorText(v.err)
-	} else if v.err != nil {
-		title = "No Git repository found"
-		detail = "GoPR was opened outside a Git repository. Run godiff from inside a repository, or open one."
-	}
-	emptyPanel(c, pal, title, detail, func() {
-		if ui.PrimaryButton(c, "Open Folder…").Clicked() {
-			openFolder()
-		}
-	})
 }

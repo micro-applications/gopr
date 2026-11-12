@@ -180,41 +180,26 @@ var (
 	windows   []*window
 )
 
-// openWindow opens a window on the repository holding dir.
-func openWindow(dir string, src source) error {
-	repo, err := git.Open(dir)
-	if err != nil {
-		return err
-	}
-	if src.kind == sourceCommit {
-		hash, err := repo.Resolve(src.ref)
-		if err != nil {
-			return err
-		}
-		src.ref = hash
-	}
-	if src.kind == sourcePull {
-		ref, err := resolvePull(repo, src.ref)
-		if err != nil {
-			return err
-		}
-		src.ref = ref
-	}
-	// A repository already open comes to the front.
+// openMu keeps two launches from making two windows.
+var openMu sync.Mutex
+
+// openApp makes the window of the app, or brings the one open to the front.
+func openApp() *window {
+	openMu.Lock()
+	defer openMu.Unlock()
 	windowsMu.Lock()
-	for _, w := range windows {
-		if w.repo != nil && w.repo.Root == repo.Root && w.launch == src {
-			windowsMu.Unlock()
-			w.win.Show()
-			w.win.Focus()
-			return nil
-		}
+	if len(windows) > 0 {
+		w := windows[0]
+		windowsMu.Unlock()
+		w.win.Show()
+		w.win.Focus()
+		return w
 	}
 	windowsMu.Unlock()
 
-	w := newWindow(repo, src)
+	w := newWindow(nil, source{})
 	w.win = mygo.NewWindow(mygo.WindowOptions{
-		Title:          windowTitle(repo.Root, src),
+		Title:          "GoPR",
 		Width:          1280,
 		Height:         860,
 		MinWidth:       720,
@@ -249,12 +234,9 @@ func openWindow(dir string, src source) error {
 		go w.checkChanges()
 		w.win.Update(w.refreshInboxIfStale)
 	})
-	go state.addRecent(repo.Root)
-	w.load()
-	w.loadUser()
 	w.loadInbox()
 	w.captureIfAsked()
-	return nil
+	return w
 }
 
 // newWindow makes the state of a window reviewing a source of a

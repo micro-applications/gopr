@@ -164,21 +164,6 @@ func applyTheme(s Settings) {
 	}
 }
 
-// openFolder asks for a repository and opens it.
-func openFolder() {
-	go func() {
-		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Title: "Open a Git Repository", Directory: true})
-		if err != nil || len(paths) == 0 {
-			return
-		}
-		if err := openWindow(paths[0], source{kind: sourceWorkingTree}); err != nil {
-			mygo.Dialog.Error("Could not open the folder", errorText(err))
-			return
-		}
-		closeWelcome()
-	}()
-}
-
 // agentMenuItems choose the agent that reviews with AI.
 func agentMenuItems(s Settings) []*mygo.MenuItem {
 	choose := func(name string) func(*mygo.MenuItem, *mygo.Window) {
