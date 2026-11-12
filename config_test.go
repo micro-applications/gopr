@@ -51,6 +51,40 @@ func TestMigrateFileCopiesOnce(t *testing.T) {
 	}
 }
 
+func TestMigrateDirCopiesOnce(t *testing.T) {
+	dir := t.TempDir()
+	oldDir, newDir := filepath.Join(dir, "Godiff", "analyses"), filepath.Join(dir, "GoPR", "analyses")
+	writeFile(t, oldDir, "a.json", "a")
+	writeFile(t, oldDir, "b.json", "b")
+	if err := migrateDir(newDir, oldDir); err != nil {
+		t.Fatal(err)
+	}
+	for name, want := range map[string]string{"a.json": "a", "b.json": "b"} {
+		if got, _ := os.ReadFile(filepath.Join(newDir, name)); string(got) != want {
+			t.Errorf("%s: got %q", name, got)
+		}
+	}
+	if entries, _ := os.ReadDir(filepath.Dir(newDir)); len(entries) != 1 {
+		t.Errorf("left beside it: %v", entries)
+	}
+	// Once there, it is left alone.
+	writeFile(t, oldDir, "a.json", "changed")
+	if err := migrateDir(newDir, oldDir); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(filepath.Join(newDir, "a.json")); string(got) != "a" {
+		t.Errorf("the second call overwrote: %q", got)
+	}
+	// Without an old directory, nothing is made.
+	none := filepath.Join(dir, "none")
+	if err := migrateDir(none, filepath.Join(dir, "missing")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(none); err == nil {
+		t.Error("the new directory was made")
+	}
+}
+
 func TestMigrateFileNoOld(t *testing.T) {
 	dir := t.TempDir()
 	newPath := filepath.Join(dir, "new")

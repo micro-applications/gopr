@@ -348,6 +348,8 @@ func (s *store) open() {
 	}
 	s.path = filepath.Join(dir, "state.json")
 	migrateFile(s.path, filepath.Join(filepath.Dir(dir), "Godiff", "state.json"))
+	// The AI reviews saved, which analysisPath keeps beside the state.
+	migrateDir(filepath.Join(dir, "analyses"), filepath.Join(filepath.Dir(dir), "Godiff", "analyses"))
 	if data, err := os.ReadFile(s.path); err == nil {
 		json.Unmarshal(data, &s.data)
 	}
