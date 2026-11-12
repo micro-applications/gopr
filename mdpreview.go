@@ -71,6 +71,7 @@ func (w *window) markdownOptions(p string) *markdown.Options {
 	}
 	dir := path.Dir(p)
 	o := &markdown.Options{
+		Code: map[string]func(*ui.Context, *markdown.CodeBlockView){"mermaid": w.mermaidBlock},
 		// It runs on a goroutine of its own: repo and rev were taken on the
 		// main thread.
 		LoadImage: func(raw string) (ui.ImageSource, error) {

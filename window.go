@@ -126,7 +126,9 @@ type window struct {
 	// mdSource shows the source of a Markdown file's tab rather than its
 	// preview, by path. mdOpts are the previews' options, which keep their
 	// pictures, for the clone and the head in mdOptsFor.
-	mdSource  map[string]bool
+	mdSource map[string]bool
+	// mermaid are the Mermaid diagrams of the previews, laid out or being.
+	mermaid   map[mermaidKey]*mermaidDiagram
 	mdOpts    map[string]*markdown.Options
 	mdOptsFor string
 	// The revisions of the old and the new side of the last load; "" is

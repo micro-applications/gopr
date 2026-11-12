@@ -5,6 +5,7 @@ go 1.27.1
 tool github.com/egoist/mygo/cmd/mygo
 
 require (
+	github.com/Broderick-Westrope/pele-go v0.2.0
 	github.com/alecthomas/chroma/v2 v2.27.0
 	github.com/egoist/mygo v0.4.9-0.20261014215200-a17c244ec2b7
 )

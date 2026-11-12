@@ -36,6 +36,11 @@ your disk, or clones it, and shows the pull request there.
   default), Wide or Full Width — and their text can be made bigger or
   smaller, from the icon buttons in the tab's header, **View → Markdown
   Preview** or the command bar.
+- **Mermaid diagrams** in Markdown previews: fenced `mermaid` blocks draw
+  as diagrams — all 33 of Mermaid's types — laid out by
+  [pele-go](https://github.com/Broderick-Westrope/pele-go) and drawn
+  natively, in the app's fonts and light or dark colors. A block that does
+  not parse shows its source and the error.
 - **Viewed files**: marking a file viewed collapses it, and it opens again
   once it changes. Generated files (lockfiles, `*.min.js`,
   `linguist-generated`, …) and dependency folders start collapsed.

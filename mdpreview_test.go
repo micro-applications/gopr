@@ -34,8 +34,15 @@ const readmeChange = "# App\n\nSome **bold** text\n"
 // readmeChange as well, with the review comments of comments.
 func openedReadmePull(t *testing.T, comments string) (*window, *ui.Tester) {
 	t.Helper()
+	return openedReadme(t, comments, readmeChange)
+}
+
+// openedReadme opens acme/app#1, which changes README.md to readme, with
+// the review comments of comments.
+func openedReadme(t *testing.T, comments, readme string) (*window, *ui.Tester) {
+	t.Helper()
 	freshState(t)
-	clone, base, head := pullClone(t, acmeApp, readmeChange)
+	clone, base, head := pullClone(t, acmeApp, readme)
 	(&fakeGitHub{base: base, head: head, comments: comments}).serve(t)
 	fakeResolve(t, map[github.Repo]string{acmeApp: realPath(t, clone)})
 	w, tt := emptyWindow(t)
