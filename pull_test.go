@@ -217,7 +217,8 @@ func pullRepo(t *testing.T) (clone, base, head string) {
 }
 
 // pullServer is pullRepo with the path of the repository GitHub keeps.
-func pullServer(t *testing.T) (server, clone, base, head string) {
+// A readme, when given, is README.md on the pull request's branch.
+func pullServer(t *testing.T, readme ...string) (server, clone, base, head string) {
 	server = t.TempDir()
 	gitIn(t, server, "init", "-q", "-b", "main")
 	writeFile(t, server, "main.go", mainGo)
@@ -228,6 +229,9 @@ func pullServer(t *testing.T) (server, clone, base, head string) {
 	gitIn(t, server, "checkout", "-q", "-b", "greet")
 	writeFile(t, server, "main.go", strings.Replace(mainGo, `"Hello, " + name`, `"Hi, " + name + "!"`, 1))
 	writeFile(t, server, "main_test.go", "package main\n\nimport \"testing\"\n\nfunc TestGreet(t *testing.T) {}\n")
+	for _, r := range readme {
+		writeFile(t, server, "README.md", r)
+	}
 	gitIn(t, server, "add", ".")
 	gitIn(t, server, "commit", "-q", "-m", "Greet louder")
 	head = strings.TrimSpace(gitIn(t, server, "rev-parse", "HEAD"))

@@ -69,19 +69,20 @@ type gapShown struct{ top, bottom int }
 type rowKind uint8
 
 const (
-	rowHeader  rowKind = iota // a file's header, pinned while its lines scroll
-	rowNote                   // why the lines do not show
-	rowImage                  // a picture, before and after
-	rowGap                    // unchanged lines not shown
-	rowLine                   // a line, or a pair of lines side by side
-	rowComment                // a comment on the line above
-	rowEnd                    // the bottom of a file's card
-	rowCommit                 // the message of the commit shown
-	rowPull                   // the pull request shown
-	rowSummary                // the agent's review of the changes
-	rowGroup                  // the header of a group of files
-	rowThread                 // a review thread of the pull request
-	rowAINote                 // a note of the agent's review
+	rowHeader   rowKind = iota // a file's header, pinned while its lines scroll
+	rowNote                    // why the lines do not show
+	rowImage                   // a picture, before and after
+	rowGap                     // unchanged lines not shown
+	rowLine                    // a line, or a pair of lines side by side
+	rowComment                 // a comment on the line above
+	rowEnd                     // the bottom of a file's card
+	rowCommit                  // the message of the commit shown
+	rowPull                    // the pull request shown
+	rowSummary                 // the agent's review of the changes
+	rowGroup                   // the header of a group of files
+	rowThread                  // a review thread of the pull request
+	rowAINote                  // a note of the agent's review
+	rowMarkdown                // a Markdown file rendered, in place of its lines
 )
 
 // row is a row of the diff surface.
@@ -273,6 +274,11 @@ func (w *window) buildRows() {
 			rows = append(rows, row{kind: rowNote, file: idx})
 			rows = w.appendUnplaced(rows, idx, f)
 			rows = append(rows, row{kind: rowEnd, file: idx})
+			continue
+		}
+		if w.previewing(f) {
+			// The threads and the comments on its lines show in Diff.
+			rows = append(rows, row{kind: rowMarkdown, file: idx}, row{kind: rowEnd, file: idx})
 			continue
 		}
 		f.computeWords()

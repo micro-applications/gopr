@@ -51,6 +51,13 @@ func (w *window) openFileTab(path string, line int) {
 		i = len(w.fileTabs) - 1
 	}
 	w.activeTab = i + 1
+	// A line to show is in the source of a Markdown file.
+	if line > 0 && isMarkdown(path) {
+		if w.mdSource == nil {
+			w.mdSource = map[string]bool{}
+		}
+		w.mdSource[path] = true
+	}
 	// The list keeps the request until it is built, once the lines load.
 	if line > 0 {
 		w.fileTabs[i].list.ScrollTo(line-1, ui.Center)
@@ -242,6 +249,18 @@ func (w *window) fileView(c *ui.Context, pal *palette, tab *fileTab) {
 	case lines == nil:
 		emptyPanel(c, pal, "This file cannot be shown", tab.path, nil)
 		return
+	}
+	if isMarkdown(f.Path) {
+		ui.Row(c).Height(40).Padding(0, 12).Gap(8).Shrink(0).Background(pal.codeBg).
+			BorderWidth(0, 0, 1, 0).BorderColor(pal.cardBorder).Children(func() {
+			ui.Spacer(c)
+			w.sourceToggle(c, pal, f.Path)
+		})
+		// The find bar finds in the source.
+		if !w.mdSource[f.Path] && !tab.finding {
+			w.markdownTab(c, pal, f)
+			return
+		}
 	}
 	changed := changedNewLines(f.File)
 	active := -1

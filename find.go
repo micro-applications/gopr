@@ -69,7 +69,12 @@ func (w *window) updateMatches() {
 			w.matches = append(w.matches, match{file: fi, hunk: -1, line: -1})
 			found = true
 		}
-		for hi, h := range f.Hunks {
+		// A file rendered has no lines to find.
+		hunks := f.Hunks
+		if w.previewing(f) {
+			hunks = nil
+		}
+		for hi, h := range hunks {
 			for li, l := range h.Lines {
 				if strings.Contains(strings.ToLower(l.Text), q) {
 					w.matches = append(w.matches, match{file: fi, hunk: int32(hi), line: int32(li)})

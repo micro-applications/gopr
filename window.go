@@ -20,6 +20,7 @@ import (
 	"github.com/egoist/godiff/internal/highlight"
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/markdown"
 )
 
 // sourceKind is what a window reviews.
@@ -122,6 +123,13 @@ type window struct {
 	// fileTabs[i-1].
 	fileTabs  []fileTab
 	activeTab int
+	// How the changed Markdown files show, by path: mdDiff for the diff in
+	// Changes rather than the preview, mdSource for the source in a file's
+	// tab. mdOpts are their previews' options, which keep their pictures,
+	// for the clone and the head in mdOptsFor.
+	mdDiff, mdSource map[string]bool
+	mdOpts           map[string]*markdown.Options
+	mdOptsFor        string
 	// The revisions of the old and the new side of the last load; "" is
 	// the work tree.
 	oldRev, newRev string
@@ -424,6 +432,7 @@ func (w *window) switchTo(src source) {
 	w.selFile, w.selHunk = -1, -1
 	w.finding, w.query = false, ""
 	w.fileTabs, w.activeTab = nil, 0
+	w.mdDiff, w.mdSource, w.mdOpts = nil, nil, nil
 	w.hscroll = map[string]float32{}
 	w.current = 0
 	if w.win != nil && w.repo != nil {

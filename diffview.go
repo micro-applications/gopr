@@ -143,6 +143,8 @@ func (w *window) diffRow(c *ui.Context, pal *palette, i int, focused bool) {
 		w.gapRow(c, pal, f, r)
 	case rowImage:
 		w.imageRow(c, pal, f)
+	case rowMarkdown:
+		w.markdownRow(c, pal, f)
 	case rowLine:
 		w.lineRow(c, pal, f, r)
 	case rowComment:
@@ -282,6 +284,9 @@ func (w *window) fileHeader(c *ui.Context, pal *palette, idx int, f *fileState, 
 				ui.Icon(c, iconComment).FontSize(12)
 				ui.Text(c, itoa(n)).Font(w.codeFont()).FontSize(12).FontWeight(600)
 			})
+		}
+		if canPreview(f) {
+			w.diffToggle(c, pal, idx, f)
 		}
 		w.viewedButton(c, pal, f, viewed)
 	})

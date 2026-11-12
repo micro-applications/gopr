@@ -50,10 +50,11 @@ func fakeGitHubGits(t *testing.T, servers map[github.Repo]string) {
 }
 
 // pullClone is pullServer with the clone's origin on GitHub, which
-// fetches reach the local server through.
-func pullClone(t *testing.T, repo github.Repo) (clone, base, head string) {
+// fetches reach the local server through, and its README.md changed to
+// readme when given.
+func pullClone(t *testing.T, repo github.Repo, readme ...string) (clone, base, head string) {
 	t.Helper()
-	server, clone, base, head := pullServer(t)
+	server, clone, base, head := pullServer(t, readme...)
 	gitIn(t, clone, "remote", "set-url", "origin", "https://github.com/"+repo.Owner+"/"+repo.Name+".git")
 	fakeGitHubGit(t, server, repo)
 	return clone, base, head
