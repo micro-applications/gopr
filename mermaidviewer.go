@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"runtime"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -26,11 +27,77 @@ type mermaidViewer struct {
 	scroll ui.ScrollState
 	// view is the size of the scrolling area, as the last frame laid it.
 	view ui.Rect
+
+	// The diagram grows from from, where the preview showed it, as the
+	// viewer opens at opened, and goes back there as it closes at closed,
+	// from where it showed then, back.
+	from, back     ui.Rect
+	opened, closed time.Time
+	closing        bool
 }
 
-// openMermaid shows a diagram in the viewer, fitting the window.
-func (w *window) openMermaid(m *mermaidDiagram) {
-	w.viewer = &mermaidViewer{m: m, zoom: 1, fit: true}
+// mermaidMotion is how long the viewer takes to open and to close.
+var mermaidMotion = 280 * time.Millisecond
+
+// viewerNow is the time the viewer's motion goes by: tests set it.
+var viewerNow = time.Now
+
+// openMermaid shows a diagram in the viewer, fitting the window, growing
+// from from, where it showed.
+func (w *window) openMermaid(m *mermaidDiagram, from ui.Rect) {
+	w.viewer = &mermaidViewer{m: m, zoom: 1, fit: true, from: from, opened: viewerNow()}
+}
+
+// closeViewer closes the viewer: the diagram goes back to its place in
+// the preview, unless it goes there already.
+func (w *window) closeViewer() {
+	v := w.viewer
+	if v == nil || v.closing {
+		return
+	}
+	if mermaidMotion <= 0 || v.from.W <= 0 {
+		w.viewer = nil
+		return
+	}
+	v.closing, v.closed, v.back = true, viewerNow(), v.shown()
+}
+
+// shown is where the diagram shows in the window, as zoomed and scrolled.
+func (v *mermaidViewer) shown() ui.Rect {
+	width, height := float32(v.m.d.Width)*v.zoom, float32(v.m.d.Height)*v.zoom
+	return ui.Rect{
+		X: v.view.X + max(v.view.W-width, 0)/2 - v.scroll.X,
+		Y: v.view.Y + max(v.view.H-height, 0)/2 - v.scroll.Y,
+		W: width, H: height,
+	}
+}
+
+// progress is how far open the viewer is, 0 to 1, and whether it moves.
+func (v *mermaidViewer) progress(reduce bool) (float32, bool) {
+	if mermaidMotion <= 0 || reduce || v.from.W <= 0 {
+		if v.closing {
+			return 0, false
+		}
+		return 1, false
+	}
+	if v.closing {
+		f := float32(viewerNow().Sub(v.closed)) / float32(mermaidMotion)
+		if f >= 1 {
+			return 0, false
+		}
+		return 1 - ui.EaseInOut(max(f, 0)), true
+	}
+	f := float32(viewerNow().Sub(v.opened)) / float32(mermaidMotion)
+	if f >= 1 {
+		return 1, false
+	}
+	return ui.EaseOut(max(f, 0)), true
+}
+
+// lerpRect is a rect t of the way from a to b.
+func lerpRect(a, b ui.Rect, t float32) ui.Rect {
+	l := func(x, y float32) float32 { return x + (y-x)*t }
+	return ui.Rect{X: l(a.X, b.X), Y: l(a.Y, b.Y), W: l(a.W, b.W), H: l(a.H, b.H)}
 }
 
 // fitZoom is the zoom that shows the whole diagram in the view.
@@ -74,15 +141,23 @@ func (w *window) mermaidViewerView(c *ui.Context, pal *palette) {
 	if v.fit {
 		v.zoom = v.fitZoom()
 	}
+	open, moving := v.progress(c.Preferences().ReduceMotion)
+	if v.closing && !moving {
+		w.viewer = nil
+		return
+	}
+	if moving {
+		c.After(0)
+	}
 	t := c.Theme()
 	ui.Overlay(c, func() {
-		panel := ui.Column(c).Absolute().Left(0).Top(0).Right(0).Bottom(0).Background(pal.appBg).Label("Diagram viewer")
+		panel := ui.Column(c).Absolute().Left(0).Top(0).Right(0).Bottom(0).Background(pal.appBg.Alpha(open)).Label("Diagram viewer")
 		panel.Children(func() {
 			left := float32(12)
 			if runtime.GOOS == "darwin" {
 				left = max(c.TitleBar().Left+8, 12)
 			}
-			ui.Row(c).Height(titleBarHeight).Padding(0, 12, 0, left).Gap(6).AlignItems(ui.Center).Shrink(0).
+			ui.Row(c).Height(titleBarHeight).Padding(0, 12, 0, left).Gap(6).AlignItems(ui.Center).Shrink(0).Opacity(open).
 				BorderWidth(0, 0, 1, 0).BorderColor(pal.cardBorder).DragWindow().Children(func() {
 				ui.Text(c, "Diagram").FontSize(13).FontWeight(600)
 				ui.Spacer(c)
@@ -101,14 +176,18 @@ func (w *window) mermaidViewerView(c *ui.Context, pal *palette) {
 					v.setZoom(1)
 				}
 				if iconButton(c, iconClose, "Close (Esc)").Size(28, 26).Label("Close Diagram").Clicked() {
-					w.viewer = nil
+					w.closeViewer()
 				}
 			})
 			if w.viewer == nil {
 				return
 			}
+			// While it moves, the diagram flies over a view left empty.
 			width, height := float32(v.m.d.Width)*v.zoom, float32(v.m.d.Height)*v.zoom
-			body := ui.ScrollBoth(c).Grow(1).MinHeight(0).TrackScroll(&v.scroll).Background(pal.codeBg)
+			body := ui.ScrollBoth(c).Grow(1).MinHeight(0).TrackScroll(&v.scroll).Background(pal.codeBg.Alpha(open))
+			if moving {
+				body.Opacity(0)
+			}
 			body.Children(func() {
 				// The diagram stays centered while smaller than the view.
 				area := ui.Box(c).Size(max(width, v.view.W), max(height, v.view.H)).Cursor(ui.CursorGrab).Label("Diagram canvas")
@@ -125,14 +204,27 @@ func (w *window) mermaidViewerView(c *ui.Context, pal *palette) {
 					drawMermaid(p, v.m, ui.Rect{X: x, Y: y, W: width, H: height})
 				})
 			})
-			if b := body.Bounds(); b.W > 0 && (b.W != v.view.W || b.H != v.view.H) {
+			if b := body.Bounds(); b.W > 0 && b != v.view {
 				v.view = b
 				c.After(0)
 			}
 		})
+		if moving {
+			// The diagram, between its place in the preview and the view.
+			from, to := v.from, v.shown()
+			if v.closing {
+				from, to = v.from, v.back
+			}
+			if v.view.W <= 0 {
+				to = from
+			}
+			r := lerpRect(from, to, open)
+			ui.Box(c).Absolute().Left(0).Top(0).Right(0).Bottom(0).Label("Diagram moving").
+				Draw(func(p *ui.Painter, _ ui.Rect) { drawMermaid(p, v.m, r) })
+		}
 		switch {
 		case panel.OverlayShortcut(0, ui.KeyEscape):
-			w.viewer = nil
+			w.closeViewer()
 		case panel.OverlayShortcut(0, ui.KeyEqual), panel.OverlayShortcut(ui.Shift, ui.KeyEqual):
 			v.zoomBy(1)
 		case panel.OverlayShortcut(0, ui.KeyMinus):

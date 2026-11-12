@@ -41,7 +41,8 @@ your disk, or clones it, and shows the pull request there.
   [pele-go](https://github.com/Broderick-Westrope/pele-go) and drawn
   natively, in the app's fonts and light or dark colors. A block that does
   not parse shows its source and the error. Click a diagram to open it over
-  the window, fitted to it: zoom from 25% to 600% with the toolbar or
+  the window — it grows from its place in the preview, and goes back there
+  as it closes — fitted to it: zoom from 25% to 600% with the toolbar or
   <kbd>+</kbd>, <kbd>-</kbd>, <kbd>0</kbd> (actual size) and <kbd>F</kbd>
   (fit), pan by dragging or scrolling, and close it with <kbd>Esc</kbd>.
 - **Viewed files**: marking a file viewed collapses it, and it opens again

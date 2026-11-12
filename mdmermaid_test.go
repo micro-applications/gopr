@@ -4,6 +4,7 @@ import (
 	"math"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -83,7 +84,15 @@ func TestMermaidPreview(t *testing.T) {
 	}
 }
 
+// noMotion opens and closes the viewer at once, for a test.
+func noMotion(t *testing.T) {
+	old := mermaidMotion
+	mermaidMotion = 0
+	t.Cleanup(func() { mermaidMotion = old })
+}
+
 func TestMermaidViewer(t *testing.T) {
+	noMotion(t)
 	w, tt := openedReadme(t, `[]`, mermaidReadme)
 	w.previewFile("README.md")
 	tt.SetSize(1400, 900)
@@ -187,6 +196,7 @@ func TestMermaidTiles(t *testing.T) {
 
 // A diagram larger than MyGo draws an SVG at once still shows its shapes.
 func TestMermaidViewerLarge(t *testing.T) {
+	noMotion(t)
 	src := "# Wide\n\n```mermaid\nflowchart LR\n  A[One] --> B[Two] --> C[Three] --> D[Four] --> E[Five] --> F[Six] --> G[Seven] --> H[Eight]\n```\n"
 	w, tt := openedReadme(t, `[]`, src)
 	w.previewFile("README.md")
@@ -256,4 +266,93 @@ func absDiff(a, b uint8) int {
 		return int(a - b)
 	}
 	return int(b - a)
+}
+
+func TestMermaidViewerMotion(t *testing.T) {
+	now := time.Unix(1_800_000_000, 0)
+	old := viewerNow
+	viewerNow = func() time.Time { return now }
+	t.Cleanup(func() { viewerNow = old })
+	w, tt := openedReadme(t, `[]`, mermaidReadme)
+	w.previewFile("README.md")
+	tt.SetSize(1400, 900)
+	for range 3 {
+		tt.Frame()
+	}
+	inline, _ := tt.Find("Mermaid diagram")
+	if err := tt.Click("Mermaid diagram"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	v := w.viewer
+	if v == nil || v.from != inline {
+		t.Fatalf("the viewer did not open from the diagram at %+v: %+v", inline, v)
+	}
+	// It starts where the preview showed the diagram, moving.
+	tt.Frame()
+	if _, ok := tt.Find("Diagram moving"); !ok {
+		t.Fatal("the diagram does not move as the viewer opens")
+	}
+	open, moving := v.progress(false)
+	if !moving || open != 0 {
+		t.Errorf("at the start: open %v, moving %v", open, moving)
+	}
+	// Halfway, it is between the preview and the view, larger.
+	now = now.Add(mermaidMotion / 2)
+	tt.Frame()
+	open, moving = v.progress(false)
+	if !moving || open <= 0.5 || open >= 1 {
+		t.Errorf("halfway, eased out: open %v, moving %v", open, moving)
+	}
+	mid := lerpRect(v.from, v.shown(), open)
+	if mid.W <= inline.W || mid.W >= v.shown().W {
+		t.Errorf("halfway %v wide, from %v to %v", mid.W, inline.W, v.shown().W)
+	}
+	snapshot(t, tt, "mermaid-viewer-opening")
+	if w.viewer.m != v.m {
+		t.Fatal("another diagram in the viewer")
+	}
+	// Then the viewer is open, and the diagram rests in it.
+	now = now.Add(mermaidMotion)
+	tt.Frame()
+	tt.Frame()
+	if _, moving := v.progress(false); moving {
+		t.Error("still moving after the motion")
+	}
+	if _, ok := tt.Find("Diagram moving"); ok {
+		t.Error("the moving diagram stays once open")
+	}
+	if _, ok := tt.Find("Diagram canvas"); !ok {
+		t.Error("no canvas once open")
+	}
+
+	// Escape takes it back to the preview, then closes the viewer.
+	tt.Key(0, ui.KeyEscape)
+	tt.Frame()
+	if w.viewer == nil || !v.closing {
+		t.Fatal("the viewer closed at once")
+	}
+	if v.back.W <= inline.W {
+		t.Errorf("it leaves from %+v", v.back)
+	}
+	now = now.Add(mermaidMotion / 2)
+	tt.Frame()
+	if open, moving := v.progress(false); !moving || open <= 0 || open >= 1 {
+		t.Errorf("closing halfway: open %v, moving %v", open, moving)
+	}
+	now = now.Add(mermaidMotion)
+	tt.Frame()
+	tt.Frame()
+	if w.viewer != nil {
+		t.Error("the viewer stays after closing")
+	}
+
+	// Less motion, as the desktop asks, opens it at once.
+	if err := tt.Click("Mermaid diagram"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if open, moving := w.viewer.progress(true); open != 1 || moving {
+		t.Errorf("with less motion: open %v, moving %v", open, moving)
+	}
 }

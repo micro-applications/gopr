@@ -228,9 +228,14 @@ func (w *window) mermaidView(c *ui.Context, m *mermaidDiagram) {
 	ui.Row(c).Justify(ui.Center).Children(func() {
 		box := ui.Box(c).Width(width).Shrink(1).MinWidth(0).AspectRatio(width / height).
 			Label("Mermaid diagram").Tooltip("Open the diagram to zoom").Cursor(ui.CursorPointer).
-			Draw(func(p *ui.Painter, r ui.Rect) { drawMermaid(p, m, r) })
+			Draw(func(p *ui.Painter, r ui.Rect) {
+				// The viewer shows it, from here and back here, meanwhile.
+				if w.viewer == nil || w.viewer.m != m {
+					drawMermaid(p, m, r)
+				}
+			})
 		if box.Clicked() {
-			w.openMermaid(m)
+			w.openMermaid(m, box.Bounds())
 		}
 	})
 }
