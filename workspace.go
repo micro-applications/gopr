@@ -78,12 +78,9 @@ func (w *window) bindRepo(repo *git.Repo, want github.Repo) {
 	w.genA.Store(int64(w.gen))
 	w.repo = repo
 	w.gh, _ = findGitHubRemote(repo, want)
-	w.history, w.historyLoading = nil, false
 	w.treeSel = ""
 	w.closedDirs = map[string]bool{}
-	w.commitTimes = map[string]commitTime{}
 	w.changed = false
-	w.signature = ""
 	w.loadUser()
 	state.addRecent(repo.Root)
 }

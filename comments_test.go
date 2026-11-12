@@ -77,8 +77,6 @@ func TestCommentOnExpandedLine(t *testing.T) {
 
 func TestSwitchSourceOnFilesTab(t *testing.T) {
 	w, tt := newTestWindow(t, testRepo(t))
-	w.tab = 0
-	tt.Frame()
 	hash, err := w.repo.Resolve("HEAD")
 	if err != nil {
 		t.Fatal(err)
@@ -89,9 +87,8 @@ func TestSwitchSourceOnFilesTab(t *testing.T) {
 	w.setSource(source{kind: sourceCommit, ref: hash})
 	tt.Frame()
 	tt.Frame()
-	// The commit shows at once, its message from the history, before its
-	// changes load.
-	if w.source.kind != sourceCommit || tt.HasText("new.go") || !tt.HasText("First commit") {
+	// The commit shows at once, before its changes load.
+	if w.source.kind != sourceCommit || tt.HasText("new.go") {
 		t.Errorf("source %+v, texts %q", w.source, tt.Texts())
 	}
 	for _, label := range []string{"Changes", "Changed files"} {

@@ -483,7 +483,7 @@ func (w *window) reviewAgent() (agent.Agent, bool) {
 // lists.
 func (w *window) modelMenu(c *ui.Context) {
 	a, ok := w.reviewAgent()
-	if !ok {
+	if !ok || w.repo == nil {
 		return
 	}
 	list := modelsOf(a, w.repo.Root)

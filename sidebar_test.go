@@ -66,24 +66,3 @@ func TestFileTreeDirectoryDisclosureWaitsForRelease(t *testing.T) {
 		t.Fatal("release did not close the directory")
 	}
 }
-
-func TestHistorySelectsOnPressFromOutsideSidebar(t *testing.T) {
-	w, tt := newTestWindow(t, testRepo(t))
-	w.tab = 1
-	tt.Frame()
-	if err := tt.Click("Filter history"); err != nil {
-		t.Fatal(err)
-	}
-	r, ok := tt.Find("First commit")
-	if !ok {
-		t.Fatal("the commit row is missing")
-	}
-	tt.Press(r.X+r.W/2, r.Y+r.H/2)
-	if w.source.kind != sourceCommit || w.commit == nil || w.commit.Subject != "First commit" {
-		t.Fatalf("press did not select the commit: %+v", w.source)
-	}
-	if !tt.Focused("History") {
-		t.Fatal("the history did not take focus on press")
-	}
-	tt.Release(r.X+r.W/2, r.Y+r.H/2)
-}

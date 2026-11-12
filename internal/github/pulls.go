@@ -97,46 +97,6 @@ type Label struct {
 	Color string
 }
 
-// OpenPulls returns the open pull requests of a repository, the recently
-// updated first: the first hundred.
-func (c *Client) OpenPulls(ctx context.Context, repo Repo) ([]Summary, error) {
-	if c.Token == "" {
-		return c.openPullsREST(ctx, repo)
-	}
-	return c.openPullsGraphQL(ctx, repo)
-}
-
-func (c *Client) openPullsREST(ctx context.Context, repo Repo) ([]Summary, error) {
-	var items []struct {
-		Number    int       `json:"number"`
-		Title     string    `json:"title"`
-		HTMLURL   string    `json:"html_url"`
-		Draft     bool      `json:"draft"`
-		User      User      `json:"user"`
-		Head      Branch    `json:"head"`
-		CreatedAt time.Time `json:"created_at"`
-		UpdatedAt time.Time `json:"updated_at"`
-		Labels    []struct {
-			Name  string `json:"name"`
-			Color string `json:"color"`
-		} `json:"labels"`
-	}
-	path := fmt.Sprintf("/repos/%s/pulls?state=open&sort=updated&direction=desc&per_page=100", repo)
-	if _, err := c.do(ctx, http.MethodGet, path, nil, &items); err != nil {
-		return nil, err
-	}
-	out := make([]Summary, 0, len(items))
-	for _, it := range items {
-		s := Summary{Number: it.Number, Title: it.Title, URL: it.HTMLURL, Draft: it.Draft, Author: it.User,
-			HeadRef: it.Head.Ref, CreatedAt: it.CreatedAt, UpdatedAt: it.UpdatedAt}
-		for _, l := range it.Labels {
-			s.Labels = append(s.Labels, Label{Name: l.Name, Color: l.Color})
-		}
-		out = append(out, s)
-	}
-	return out, nil
-}
-
 // pullFields are the fields of a pull request that searchNode decodes.
 const pullFields = `
         number title url isDraft createdAt updatedAt headRefName
@@ -146,16 +106,6 @@ const pullFields = `
         reviewDecision
         commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
         additions deletions changedFiles`
-
-const openPullsQuery = `
-query OpenPullRequests($query: String!) {
-  search(query: $query, type: ISSUE, first: 100) {
-    nodes {
-      ... on PullRequest {` + pullFields + `
-      }
-    }
-  }
-}`
 
 // searchNode is a pull request as a GraphQL search returns it.
 type searchNode struct {
@@ -226,24 +176,4 @@ func summaryOf(n searchNode) Summary {
 		}
 	}
 	return s
-}
-
-func (c *Client) openPullsGraphQL(ctx context.Context, repo Repo) ([]Summary, error) {
-	var data struct {
-		Search struct {
-			Nodes []searchNode `json:"nodes"`
-		} `json:"search"`
-	}
-	q := fmt.Sprintf("repo:%s is:pr is:open sort:updated-desc", repo)
-	if err := c.graphql(ctx, openPullsQuery, map[string]any{"query": q}, &data); err != nil {
-		return nil, err
-	}
-	var out []Summary
-	for _, n := range data.Search.Nodes {
-		if n.Number == 0 {
-			continue // not a pull request
-		}
-		out = append(out, summaryOf(n))
-	}
-	return out, nil
 }

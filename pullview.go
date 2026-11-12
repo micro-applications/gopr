@@ -13,128 +13,61 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// pullsView lists the open pull requests of the repository's remote on
-// GitHub, in the sidebar.
-func (w *window) pullsView(c *ui.Context) {
+// pullRow is a pull request as a list shows it: its title, its
+// repository when given, as acme/api, its number, author and age, and how
+// its review and checks stand. current is the pull request shown, selected
+// that one while its list has the focus. The caller handles its clicks.
+func pullRow(c *ui.Context, w *window, pal *palette, p *github.Summary, repo string, current, selected bool) ui.Element {
 	t := c.Theme()
-	pal := paletteFor(t)
-	if !w.pullsLoaded && !w.pullsLoading {
-		w.loadPulls()
+	row := ui.Row(c).Gap(8).Padding(6, 8).Radius(6).AlignItems(ui.Start).Role(ui.RoleButton).Label(p.Title)
+	muted, ref := t.TextMuted, pal.ref
+	switch {
+	case selected:
+		row.Background(t.Accent).TextColor(t.AccentText)
+		muted, ref = t.AccentText.Alpha(0.75), t.AccentText
+	case current:
+		row.Background(ui.RGBA(127, 127, 127, 0.2))
+	case row.Hovered():
+		row.Background(ui.RGBA(127, 127, 127, 0.08))
 	}
-	q := strings.ToLower(strings.TrimSpace(w.pullsFilter))
-	var list []*github.Summary
-	for i := range w.pulls {
-		p := &w.pulls[i]
-		if q == "" || strings.Contains(strings.ToLower(p.Title), q) || strings.Contains(strings.ToLower(p.Author.Login), q) ||
-			strings.TrimPrefix(q, "#") == itoa(p.Number) || strings.Contains(strings.ToLower(p.HeadRef), q) {
-			list = append(list, p)
-		}
+	name := fmt.Sprintf("#%d", p.Number)
+	if repo != "" {
+		name = repo + name
 	}
-	ui.Row(c).Padding(0, 10, 4, 14).Gap(6).Children(func() {
-		label := "Open on " + w.gh.repo.String()
-		if w.pullsLoaded && w.pullsErr == nil {
-			label = fmt.Sprintf("%d open on %s", len(w.pulls), w.gh.repo)
+	row.Tooltip(fmt.Sprintf("%s %s\n%s wants to merge %s", name, p.Title, p.Author.Login, p.HeadRef))
+	row.Children(func() {
+		icon, color := iconPull, pal.addBar
+		if p.Draft {
+			icon, color = iconPullDraft, t.TextMuted
 		}
-		ui.Text(c, label).FontSize(11).FontWeight(600).TextColor(t.TextMuted).SingleLine().Grow(1).Shrink(1).MinWidth(0)
-		if w.pullsLoading {
-			ui.Spinner(c).Size(12, 12)
+		if selected {
+			color = t.AccentText
 		}
-		if iconButton(c, iconRefresh, "Refresh pull requests").Size(22, 22).Clicked() {
-			w.loadPulls()
-		}
-	})
-	if len(list) == 0 {
-		ui.Column(c).Grow(1).Center().Padding(16).Gap(8).Children(func() {
-			switch {
-			case w.pullsErr != nil:
-				ui.Text(c, errorText(w.pullsErr)).FontSize(12).TextColor(t.TextMuted).TextAlign(ui.Center)
-				if ui.Button(c, "Try Again").Clicked() {
-					w.loadPulls()
+		ui.Icon(c, icon).FontSize(14).TextColor(color).Margin(1, 0, 0).Shrink(0)
+		ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
+			ui.Text(c, p.Title).FontSize(12).FontWeight(500).MaxLines(2)
+			ui.Row(c).Gap(5).Children(func() {
+				if repo != "" {
+					ui.Text(c, repo).FontSize(10).TextColor(muted).SingleLine().Shrink(1).MinWidth(0)
 				}
-			case !w.pullsLoaded:
-				ui.Text(c, "Loading pull requests…").FontSize(12).TextColor(t.TextMuted)
-			case q != "":
-				ui.Text(c, "No matching pull requests").FontSize(12).TextColor(t.TextMuted)
-			default:
-				ui.Text(c, "No open pull requests").FontSize(12).TextColor(t.TextMuted)
-			}
-			if ui.Button(c, "Open Pull Request…").Clicked() {
-				w.openDialog(dialogPull)
-			}
-		})
-		return
-	}
-	current := -1
-	for i, p := range list {
-		if w.source == pullSource(w.gh.repo, p.Number) {
-			current = i
-		}
-	}
-	open := func(i int) {
-		if i < 0 || i >= len(list) {
-			return
-		}
-		w.commitOpen = false
-		w.pullsList.ScrollIntoView(i)
-		w.setSource(pullSource(w.gh.repo, list[i].Number))
-	}
-	w.pullsList.Key = func(i int) any { return list[i].Number }
-	w.pullsList.Label = func(i int) string { return list[i].Title }
-	ui.List(c, &w.pullsList, len(list), func(i int) {
-		focused := w.pullsList.FocusWithin(c)
-		p := list[i]
-		row := ui.Row(c).Gap(8).Padding(6, 8).Radius(6).AlignItems(ui.Start).Role(ui.RoleButton).Label(p.Title)
-		muted, ref := t.TextMuted, pal.ref
-		selected := i == current && focused
-		switch {
-		case selected:
-			row.Background(t.Accent).TextColor(t.AccentText)
-			muted, ref = t.AccentText.Alpha(0.75), t.AccentText
-		case i == current:
-			row.Background(ui.RGBA(127, 127, 127, 0.2))
-		case row.Hovered():
-			row.Background(ui.RGBA(127, 127, 127, 0.08))
-		}
-		if (row.Pressed() || row.Clicked()) && i != current {
-			open(i)
-		}
-		row.Tooltip(fmt.Sprintf("#%d %s\n%s wants to merge %s", p.Number, p.Title, p.Author.Login, p.HeadRef))
-		row.Children(func() {
-			icon, color := iconPull, pal.addBar
-			if p.Draft {
-				icon, color = iconPullDraft, t.TextMuted
-			}
-			if selected {
-				color = t.AccentText
-			}
-			ui.Icon(c, icon).FontSize(14).TextColor(color).Margin(1, 0, 0).Shrink(0)
-			ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
-				ui.Text(c, p.Title).FontSize(12).FontWeight(500).MaxLines(2)
-				ui.Row(c).Gap(5).Children(func() {
-					ui.Textf(c, "#%d", p.Number).Font(w.codeFont()).FontSize(10).TextColor(ref).Shrink(0)
-					ui.Text(c, p.Author.Login).FontSize(10).TextColor(muted).SingleLine().Shrink(1).MinWidth(0)
-					ui.Text(c, relativeTime(w.now, p.UpdatedAt)).FontSize(10).TextColor(muted).Shrink(0)
-					ui.Spacer(c)
-					switch p.ReviewDecision {
-					case "approved":
-						ui.Icon(c, iconCheck).FontSize(12).TextColor(pickColor(selected, t.AccentText, pal.addBar)).Tooltip("Approved").Shrink(0)
-					case "changes_requested":
-						ui.Icon(c, iconXCircle).FontSize(12).TextColor(pickColor(selected, t.AccentText, t.Danger)).Tooltip("Changes requested").Shrink(0)
-					}
-					if p.Checks != "" {
-						color := map[string]ui.Color{"success": pal.addBar, "failure": t.Danger, "pending": ui.Hex("#d4a72c")}[p.Checks]
-						ui.Box(c).Size(7, 7).Radius(4).Background(color).Tooltip("Checks: " + p.Checks).Shrink(0)
-					}
-				})
+				ui.Textf(c, "#%d", p.Number).Font(w.codeFont()).FontSize(10).TextColor(ref).Shrink(0)
+				ui.Text(c, p.Author.Login).FontSize(10).TextColor(muted).SingleLine().Shrink(1).MinWidth(0)
+				ui.Text(c, relativeTime(w.now, p.UpdatedAt)).FontSize(10).TextColor(muted).Shrink(0)
+				ui.Spacer(c)
+				switch p.ReviewDecision {
+				case "approved":
+					ui.Icon(c, iconCheck).FontSize(12).TextColor(pickColor(selected, t.AccentText, pal.addBar)).Tooltip("Approved").Shrink(0)
+				case "changes_requested":
+					ui.Icon(c, iconXCircle).FontSize(12).TextColor(pickColor(selected, t.AccentText, t.Danger)).Tooltip("Changes requested").Shrink(0)
+				}
+				if p.Checks != "" {
+					color := map[string]ui.Color{"success": pal.addBar, "failure": t.Danger, "pending": ui.Hex("#d4a72c")}[p.Checks]
+					ui.Box(c).Size(7, 7).Radius(4).Background(color).Tooltip("Checks: " + p.Checks).Shrink(0)
+				}
 			})
 		})
-	}).Grow(1).Padding(2, 8).Gap(1).Focusable().FocusRing(false).Label("Pull requests")
-	if w.pullsList.Shortcut(c, 0, ui.KeyDown) {
-		open(current + 1)
-	}
-	if w.pullsList.Shortcut(c, 0, ui.KeyUp) {
-		open(max(current-1, 0))
-	}
+	})
+	return row
 }
 
 // ago is " · 3d ago", "" for no time.

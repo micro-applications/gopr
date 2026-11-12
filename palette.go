@@ -45,13 +45,8 @@ func (w *window) commands() []command {
 	return []command{
 		{title: "Focus File Filter", keys: "⌘P", run: w.focusFilter},
 		{title: "Find in Diffs", keys: "⌘F", run: func() { w.finding = true }},
-		{title: "Open Commit", hint: "Review a commit", run: func() { w.openDialog(dialogCommit) }},
-		{title: "Open Branch", hint: "Compare with a branch", run: func() { w.openDialog(dialogBranch) }},
-		{title: "Open Pull Request", hint: "Review a pull request on GitHub", run: func() { w.openDialog(dialogPull) }},
-		{title: "Open Folder", keys: "⌘O", run: openFolder},
-		{title: "Show File Tree", run: func() { w.tab, w.sidebarShown = 0, true }},
-		{title: "Show History", run: func() { w.tab, w.sidebarShown = 1, true }},
-		{title: "Show Pull Requests", keys: "⌘3", run: w.showPulls},
+		{title: "Open Pull Request", hint: "Review a pull request on GitHub", keys: "⌘O", run: func() { w.openDialog(dialogPull) }},
+		{title: "Toggle Files", keys: "⌘⇧E", run: w.toggleFiles},
 		{title: "Review with AI", hint: w.agentHint(), keys: "⌘⇧I", run: w.reviewWithAI},
 		{title: "Stop the AI Review", run: w.stopAnalysis},
 		{title: "Next AI Note", keys: "N", run: notes(1)},
@@ -59,12 +54,6 @@ func (w *window) commands() []command {
 		{title: "Group Files by Kind", run: func() { w.chooseGrouping(groupKind) }},
 		{title: "Group Files by AI Review", run: func() { w.chooseGrouping(groupAI) }},
 		{title: "Ungroup Files", run: func() { w.chooseGrouping(groupNone) }},
-		{title: "Show Uncommitted Changes", run: func() { w.setSource(w.launchWorkTree()) }},
-		{title: "Commit…", run: func() {
-			if w.source.kind == sourceWorkingTree && !w.commitOpen {
-				w.toggleCommit()
-			}
-		}},
 		{title: "Copy Review Comments", run: w.copyComments},
 		{title: "Submit Review", hint: "Approve, comment or request changes", run: w.openSubmit},
 		{title: "Open Pull Request on GitHub", run: w.openPullOnGitHub},
@@ -131,8 +120,12 @@ func openConfig() {
 }
 
 func (w *window) focusFilter() {
-	w.sidebarShown = true
-	w.tab = 0
+	if len(w.files) == 0 {
+		return // no pane to focus
+	}
+	if !w.filesShown {
+		w.toggleFiles()
+	}
 	w.filterFocus = true
 }
 
@@ -267,8 +260,6 @@ type dialogKind uint8
 
 const (
 	dialogNone dialogKind = iota
-	dialogCommit
-	dialogBranch
 	dialogPull
 )
 
@@ -279,61 +270,21 @@ func (w *window) openDialog(k dialogKind) {
 	w.dialogErr = ""
 }
 
-// sourceDialog asks for a commit or a branch to review.
+// sourceDialog asks for a pull request to review, of any repository.
 func (w *window) sourceDialog(c *ui.Context) {
 	t := c.Theme()
 	if w.dialog == dialogNone {
 		return
 	}
-	title, desc, label, placeholder := "Open Commit", "Review a commit by SHA or revision, such as HEAD~1.", "Commit", "HEAD~1 or a commit SHA"
-	switch w.dialog {
-	case dialogBranch:
-		title, desc, label, placeholder = "Open Branch", "Compare the current working tree with a branch.", "Branch name", "main"
-	case dialogPull:
-		title, desc, label, placeholder = "Open Pull Request", "Review a pull request of this repository on GitHub, open or not.", "Pull request", "123, owner/repo#123 or its URL"
-	}
+	title, desc, label, placeholder := "Open Pull Request", "Review a pull request on GitHub, open or not.", "Pull request", "owner/repo#123 or its URL"
 	open := func() {
-		v := strings.TrimSpace(w.dialogValue)
-		if v == "" {
-			w.dialogErr = "Enter a " + strings.ToLower(label) + "."
+		repo, n, ok := github.ParsePull(w.dialogValue)
+		if !ok || repo.IsZero() {
+			w.dialogErr = "Enter a pull request as owner/repo#123 or its URL."
 			return
 		}
-		if w.dialogBusy {
-			return
-		}
-		// git answers off the main thread.
-		kind := w.dialog
-		w.dialogBusy = true
-		w.background(func() {
-			var hash string
-			var err error
-			if kind == dialogPull {
-				hash, err = resolvePull(w.repo, v)
-			} else {
-				hash, err = w.repo.Resolve(v)
-			}
-			w.update(func() {
-				w.dialogBusy = false
-				if !w.dialogOpen || w.dialog != kind {
-					return
-				}
-				switch {
-				case err != nil && kind == dialogBranch:
-					w.dialogErr = "Branch \"" + v + "\" does not exist in this repository."
-				case err != nil:
-					w.dialogErr = err.Error()
-				case kind == dialogPull:
-					w.dialogOpen = false
-					w.setSource(source{kind: sourcePull, ref: hash})
-				case kind == dialogCommit:
-					w.dialogOpen = false
-					w.setSource(source{kind: sourceCommit, ref: hash})
-				default:
-					w.dialogOpen = false
-					w.setSource(source{kind: sourceBranch, ref: v})
-				}
-			})
-		})
+		w.dialogOpen = false
+		w.openPull(repo, n)
 	}
 	ui.Modal(c, &w.dialogOpen, func() {
 		ui.Column(c).Width(420).Gap(14).Children(func() {
@@ -350,11 +301,7 @@ func (w *window) sourceDialog(c *ui.Context) {
 				if ui.Button(c, "Cancel").Clicked() {
 					w.dialogOpen = false
 				}
-				label := "Open"
-				if w.dialogBusy {
-					label = "Opening…"
-				}
-				if ui.PrimaryButton(c, label).Disabled(w.dialogBusy).Clicked() {
+				if ui.PrimaryButton(c, "Open").Clicked() {
 					open()
 				}
 			})
@@ -374,10 +321,10 @@ func (w *window) shortcutsHelp(c *ui.Context) {
 	}{
 		{"Navigation", [][2]string{{"Command bar", "⌘K"}, {"Filter files", "⌘P"}, {"Next hunk", "J"}, {"Previous hunk", "K"},
 			{"Next AI note", "N"}, {"Previous AI note", "⇧N"},
-			{"Toggle sidebar", "⌘⇧B"}, {"Toggle word wrap", "⌥Z"}, {"Open file in editor", "⌘⇧O"}, {"Refresh changes", "⌘R"}}},
+			{"Toggle sidebar", "⌘⇧B"}, {"Toggle files", "⌘⇧E"}, {"Toggle word wrap", "⌥Z"}, {"Open file in editor", "⌘⇧O"}, {"Refresh changes", "⌘R"}}},
 		{"Search", [][2]string{{"Find in diffs", "⌘F"}, {"Next match", "↩"}, {"Previous match", "⇧↩"}, {"Close search", "Esc"}}},
 		{"Comments", [][2]string{{"Comment on a line", "Click"}, {"Comment on the hunk", "↩"}, {"Add comment", "⌘↩"}, {"Discard comment", "Esc"}}},
-		{"Pull requests", [][2]string{{"Pull requests", "⌘3"}, {"Review with AI", "⌘⇧I"}, {"Add to your review", "⌘↩"}, {"Reply", "⌘↩"}}},
+		{"Pull requests", [][2]string{{"Open pull request", "⌘O"}, {"Review with AI", "⌘⇧I"}, {"Add to your review", "⌘↩"}, {"Reply", "⌘↩"}}},
 		{"Code", [][2]string{{"Bigger text", "⌘+"}, {"Smaller text", "⌘-"}, {"Actual size", "⌘0"}}},
 	}
 	ui.Modal(c, &w.help, func() {
@@ -403,15 +350,6 @@ func (w *window) shortcutsHelp(c *ui.Context) {
 			})
 		})
 	})
-}
-
-// showPulls shows the pull requests in the sidebar.
-func (w *window) showPulls() {
-	if !w.gh.ok() {
-		w.openDialog(dialogPull)
-		return
-	}
-	w.tab, w.sidebarShown = 2, true
 }
 
 // openSubmit opens the dialog submitting the review of the pull request

@@ -129,39 +129,46 @@ func (w *window) toolbar(c *ui.Context, pal *palette) {
 			ui.Spinner(c).Label("Loading").Size(14, 14)
 		}
 		ui.Spacer(c)
-		if !w.commitOpen {
-			// Find, the comments, and the layout.
-			if iconButton(c, iconSearch, "Find in diffs (⌘F)").Clicked() {
-				w.finding = !w.finding
+		// The files pane, find, the comments, and the layout.
+		if len(w.files) > 0 {
+			tip := "Hide files (⌘⇧E)"
+			if !w.filesShown {
+				tip = "Show files (⌘⇧E)"
 			}
-			n := w.pendingComments()
-			copied := time.Since(w.copiedAt) < 2*time.Second
-			cb := ui.ButtonBase(c).Height(28).Padding(0, 8).Gap(5).Radius(7).TextColor(t.TextMuted).
-				Label("Copy review comments").Tooltip("Copy review comments as Markdown").Disabled(n == 0)
-			if n == 0 {
-				cb.Opacity(0.5)
+			if iconButton(c, iconTree, tip).Clicked() {
+				w.toggleFiles()
 			}
-			if cb.Hovered() {
-				cb.Background(ui.RGBA(127, 127, 127, 0.13))
-			}
-			if cb.Clicked() {
-				w.copyComments()
-				c.After(2 * time.Second)
-			}
-			cb.Children(func() {
-				if copied {
-					ui.Icon(c, iconCheck).FontSize(15).TextColor(pal.viewed)
-				} else {
-					ui.Icon(c, iconComment).FontSize(15)
-				}
-				ui.Textf(c, "%d", n).Font(w.codeFont()).FontSize(11).FontWeight(700)
-			})
-			if w.source.kind == sourcePull {
-				w.reviewButton(c, pal)
-			}
-			w.groupControl(c, pal)
-			w.layoutControl(c, pal)
 		}
+		if iconButton(c, iconSearch, "Find in diffs (⌘F)").Clicked() {
+			w.finding = !w.finding
+		}
+		n := w.pendingComments()
+		copied := time.Since(w.copiedAt) < 2*time.Second
+		cb := ui.ButtonBase(c).Height(28).Padding(0, 8).Gap(5).Radius(7).TextColor(t.TextMuted).
+			Label("Copy review comments").Tooltip("Copy review comments as Markdown").Disabled(n == 0)
+		if n == 0 {
+			cb.Opacity(0.5)
+		}
+		if cb.Hovered() {
+			cb.Background(ui.RGBA(127, 127, 127, 0.13))
+		}
+		if cb.Clicked() {
+			w.copyComments()
+			c.After(2 * time.Second)
+		}
+		cb.Children(func() {
+			if copied {
+				ui.Icon(c, iconCheck).FontSize(15).TextColor(pal.viewed)
+			} else {
+				ui.Icon(c, iconComment).FontSize(15)
+			}
+			ui.Textf(c, "%d", n).Font(w.codeFont()).FontSize(11).FontWeight(700)
+		})
+		if w.source.kind == sourcePull {
+			w.reviewButton(c, pal)
+		}
+		w.groupControl(c, pal)
+		w.layoutControl(c, pal)
 	})
 }
 
@@ -205,10 +212,10 @@ func (w *window) layoutControl(c *ui.Context, pal *palette) {
 
 }
 
-// mainArea shows the review, the commit view, or why there is nothing,
-// and reports whether it built the review list in this pass.
+// mainArea shows the review, with the files pane left of it while there
+// are files, or why there is nothing, and reports whether it built the
+// review list in this pass.
 func (w *window) mainArea(c *ui.Context, pal *palette) bool {
-	t := c.Theme()
 	// A pull request being opened, or not opened, shows in place of the
 	// review.
 	switch {
@@ -227,19 +234,28 @@ func (w *window) mainArea(c *ui.Context, pal *palette) bool {
 		emptyPanel(c, pal, "Choose a pull request", "Your pull requests and the ones waiting on your review are in the sidebar.", nil)
 		return false
 	}
-	if w.commitOpen && w.source.kind == sourceWorkingTree {
-		w.commitView(c)
-		return false
-	}
+	built := false
+	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
+		if w.filesShown && len(w.files) > 0 {
+			w.filesPane(c, pal)
+			w.filesResizer(c, pal)
+		}
+		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
+			built = w.review(c, pal)
+		})
+	})
+	return built
+}
+
+// review shows the changes of the source, or why there are none, and
+// reports whether it built the review list in this pass.
+func (w *window) review(c *ui.Context, pal *palette) bool {
+	t := c.Theme()
 	if w.changed {
 		ui.Row(c).Justify(ui.Center).Padding(8, 12, 0).Children(func() {
 			ui.Row(c).Gap(6).Padding(5, 6, 5, 12).Radius(16).Background(pal.viewed.Alpha(0.1).Over(pal.codeBg)).
 				Border(1, pal.viewed.Alpha(0.2)).Children(func() {
-				what := "Local changes detected,"
-				if w.source.kind == sourcePull {
-					what = "New commits were pushed,"
-				}
-				ui.Text(c, what).FontSize(13).FontWeight(600).TextColor(pal.viewed.Mix(t.Text, 0.6))
+				ui.Text(c, "New commits were pushed,").FontSize(13).FontWeight(600).TextColor(pal.viewed.Mix(t.Text, 0.6))
 				ref := ui.ButtonBase(c).FocusRing(true).Children(func() {
 					ui.Text(c, "refresh to see them.").FontSize(13).FontWeight(600).Underline().TextColor(pal.viewed.Mix(t.Text, 0.6))
 				})
@@ -281,8 +297,7 @@ func (w *window) mainArea(c *ui.Context, pal *palette) bool {
 			slow = true
 		}
 	}
-	// The commit's message shows at once, from the history, until it
-	// shows atop the changes.
+	// The message of a commit without changes shows alone.
 	if w.source.kind == sourceCommit && w.commit != nil && w.loadErr == nil && len(w.files) == 0 {
 		w.commitMessage(c, pal).Margin(11, 12, 0)
 	}
@@ -309,13 +324,7 @@ func (w *window) mainArea(c *ui.Context, pal *palette) bool {
 		case sourcePull:
 			title, detail = "No changes in pull request", w.source.ref
 		}
-		emptyPanel(c, pal, title, detail, func() {
-			if w.source.kind == sourceWorkingTree && len(w.history) > 0 {
-				if ui.Button(c, "Show History").Clicked() {
-					w.tab, w.sidebarShown = 1, true
-				}
-			}
-		})
+		emptyPanel(c, pal, title, detail, nil)
 	default:
 		if w.rowsDirty {
 			w.updateMatches()
@@ -397,11 +406,14 @@ func (w *window) shortcuts(c *ui.Context, reviewBuilt bool) {
 		w.paletteOpen = !w.paletteOpen
 		w.paletteRow = 0
 	}
+	if c.Shortcut(ui.Cmd|ui.Shift, ui.KeyE) {
+		w.toggleFiles()
+	}
 	// Keys that type text belong to the fields: these work while no field
 	// had the focus in the last frame.
 	typing := w.typing
 	w.typing = false
-	if w.commitOpen || w.paletteOpen || w.dialogOpen || w.help || typing || !reviewBuilt || (w.pr != nil && w.pr.submitOpen) {
+	if w.paletteOpen || w.dialogOpen || w.help || typing || !reviewBuilt || (w.pr != nil && w.pr.submitOpen) {
 		return
 	}
 	if c.Shortcut(0, ui.KeyJ) || c.Shortcut(ui.Ctrl, ui.KeyDown) {
@@ -442,12 +454,12 @@ func (v *welcome) view(c *ui.Context) {
 	bar := c.TitleBar()
 	ui.Box(c).Height(max(bar.Height, 40)).DragWindow().FillWidth()
 	title := "Open a Git repository"
-	detail := "Run godiff from a Git repository in Terminal, or choose File → Open Folder… to open one."
+	detail := "Run godiff from a Git repository in Terminal, or open one."
 	if v.err != nil && !errors.Is(v.err, git.ErrNotRepository) {
 		title, detail = "Unable to read repository", errorText(v.err)
 	} else if v.err != nil {
 		title = "No Git repository found"
-		detail = "GoPR was opened outside a Git repository. Run godiff from inside a repository, or choose File → Open Folder… to open one."
+		detail = "GoPR was opened outside a Git repository. Run godiff from inside a repository, or open one."
 	}
 	emptyPanel(c, pal, title, detail, func() {
 		if ui.PrimaryButton(c, "Open Folder…").Clicked() {

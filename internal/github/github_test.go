@@ -137,8 +137,6 @@ func (f *fakeGitHub) serve(t *testing.T) *httptest.Server {
 				return
 			}
 			fmt.Fprint(w, `{"data":{}}`)
-		case r.URL.Path == "/repos/acme/app/pulls" && r.Method == http.MethodGet:
-			fmt.Fprint(w, `[{"number":4,"title":"Add","draft":false,"user":{"login":"cy"},"head":{"ref":"add"}}]`)
 		case r.Method != http.MethodGet:
 			fmt.Fprint(w, `{}`)
 		default:
@@ -175,13 +173,10 @@ func TestClient(t *testing.T) {
 		t.Fatalf("reviews %+v", r)
 	}
 
-	pulls, err := c.OpenPulls(ctx, repo)
+	// A search's pull requests come with their review and checks.
+	pulls, _, err := c.SearchPulls(ctx, "repo:acme/app")
 	if err != nil || len(pulls) != 1 || !pulls[0].Draft || pulls[0].ReviewDecision != "approved" || pulls[0].Checks != "failure" {
-		t.Fatalf("graphql pulls %+v %v", pulls, err)
-	}
-	pulls, err = (&Client{}).OpenPulls(ctx, repo)
-	if err != nil || len(pulls) != 1 || pulls[0].HeadRef != "add" {
-		t.Fatalf("rest pulls %+v %v", pulls, err)
+		t.Fatalf("searched pulls %+v %v", pulls, err)
 	}
 
 	nc := NewComment{Body: "Hm", CommitID: "h", Path: "a.go", Side: Right, Line: 5, StartLine: 3}

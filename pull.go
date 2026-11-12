@@ -398,27 +398,6 @@ func (w *window) checkPull(src source) {
 	})
 }
 
-// loadPulls lists the open pull requests of the repository's remote on
-// GitHub.
-func (w *window) loadPulls() {
-	if !w.gh.ok() || w.pullsLoading {
-		return
-	}
-	w.pullsLoading = true
-	repo := w.gh.repo
-	w.background(func() {
-		pulls, err := ghClient().OpenPulls(context.Background(), repo)
-		w.update(func() {
-			w.pullsLoading = false
-			w.pullsLoaded = true
-			w.pullsErr = err
-			if err == nil {
-				w.pulls = pulls
-			}
-		})
-	})
-}
-
 var token struct {
 	sync.Mutex
 	value string

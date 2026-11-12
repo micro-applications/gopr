@@ -30,10 +30,6 @@ func TestRecent(t *testing.T) {
 	if got[0] != "/repo5" || len(got) != maxRecent || slices.Index(got[1:], "/repo5") >= 0 {
 		t.Errorf("got %v", got)
 	}
-	s.clearRecent()
-	if len(s.recent()) != 0 {
-		t.Error("the list was not cleared")
-	}
 }
 
 func TestMigrateFileCopiesOnce(t *testing.T) {

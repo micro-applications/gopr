@@ -2,14 +2,12 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"runtime"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/egoist/godiff/internal/diff"
-	"github.com/egoist/godiff/internal/git"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -230,6 +228,13 @@ func thousands(n int) string {
 	return s
 }
 
+func plural(n int, what string) string {
+	if n == 1 {
+		return "1 " + what
+	}
+	return fmt.Sprintf("%s %ss", thousands(n), what)
+}
+
 func lines(n int, what string) string {
 	if n == 1 {
 		return "1 " + what + " line"
@@ -242,9 +247,10 @@ func countable(f *fileState) bool {
 	return !f.Binary && !f.Directory && !f.TooLarge
 }
 
+// sidebar is the column beside the workspace: its title bar, under the
+// window controls, holds the sidebar's toggle.
 func (w *window) sidebar(c *ui.Context) {
 	t := c.Theme()
-	pal := paletteFor(t)
 	bar := c.TitleBar()
 	sidebarRight := w.settings.SidebarPosition == "right"
 	left, right := max(bar.Left+6, 10), float32(10)
@@ -252,49 +258,20 @@ func (w *window) sidebar(c *ui.Context) {
 		left, right = 10, max(bar.Right+6, 10)
 	}
 	ui.Column(c).Width(w.sidebarWidth).Shrink(0).Background(w.sidebarBg(t)).Children(func() {
-		// The title bar, under the window controls: the views of the
-		// sidebar and its toggle, centered on the window controls. They
-		// keep to the right, clear of the traffic lights, on macOS, and
-		// to the left elsewhere, where the window buttons are on the right.
+		// The toggle keeps to the right, clear of the traffic lights, on
+		// macOS, and to the left elsewhere, where the window buttons are on
+		// the right.
 		mac := runtime.GOOS == "darwin"
 		ui.Row(c).Height(titleBarHeight).Padding(0, right, 0, left).Gap(6).DragWindow().Children(func() {
 			if mac {
 				ui.Spacer(c)
-			}
-			if w.tabControl(c) {
-				w.commitOpen = false
 			}
 			w.sidebarToggle(c)
 			if !mac {
 				ui.Spacer(c)
 			}
 		})
-		if w.tab == 2 && !w.gh.ok() {
-			w.tab = 0
-		}
-		ui.Column(c).Padding(2, 10, 8).Children(func() {
-			switch w.tab {
-			case 0:
-				if searchInput(c, &w.filter, "Filter files", &w.filterFocus, &w.typing) {
-					w.matchesFor = "\x00"
-					w.buildTree()
-					w.rowsDirty = true
-				}
-			case 1:
-				searchInput(c, &w.historyFilter, "Filter history", &w.filterFocus, &w.typing)
-			default:
-				searchInput(c, &w.pullsFilter, "Filter pull requests", &w.filterFocus, &w.typing)
-			}
-		})
-		switch w.tab {
-		case 0:
-			w.fileTree(c)
-		case 1:
-			w.historyView(c)
-		default:
-			w.pullsView(c)
-		}
-		w.sidebarFooter(c, pal)
+		ui.Column(c).Grow(1)
 	})
 }
 
@@ -313,32 +290,6 @@ func (w *window) sidebarBg(t *ui.Theme) ui.Color {
 // titleBarHeight is the height of the bars along the top, which centers
 // their controls on the traffic lights of a window with an inset title bar.
 const titleBarHeight = 52
-
-// tabControl switches the sidebar between the files, the history and the
-// pull requests, and reports a switch.
-func (w *window) tabControl(c *ui.Context) bool {
-	t := c.Theme()
-	pal := paletteFor(t)
-	type item struct {
-		icon *ui.SVG
-		name string
-	}
-	items := []item{{iconTree, "Files (⌘1)"}, {iconHistory, "History (⌘2)"}}
-	if w.gh.ok() {
-		items = append(items, item{iconPull, "Pull Requests (⌘3)"})
-	}
-	seg := ui.SegmentedBase(c, &w.tab, len(items))
-	seg.Track.Padding(2).Gap(2).Radius(8).Background(ui.RGBA(127, 127, 127, 0.12)).Label("Sidebar").Children(func() {
-		for i, it := range items {
-			s := seg.Segment(i).Size(30, 24).Radius(6).Center().Label(it.name).Tooltip(it.name).TextColor(t.TextMuted)
-			if i == w.tab {
-				s.Background(pal.headerBg).Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.12)).TextColor(t.Text)
-			}
-			s.Children(func() { ui.Icon(c, it.icon).FontSize(15) })
-		}
-	})
-	return seg.Track.Changed()
-}
 
 // sidebarToggle shows and hides the sidebar.
 func (w *window) sidebarToggle(c *ui.Context) {
@@ -448,7 +399,6 @@ func (w *window) fileTree(c *ui.Context) {
 	choose := func(key string) {
 		w.treeSel = key
 		if n := w.treeItems[key]; n != nil && !n.dir {
-			w.commitOpen = false
 			w.revealFile(n.file)
 		}
 	}
@@ -478,7 +428,7 @@ func (w *window) fileTree(c *ui.Context) {
 		case row.Hovered():
 			row.Background(ui.RGBA(127, 127, 127, 0.08))
 		}
-		if row.Pressed() && (!selected || w.commitOpen) {
+		if row.Pressed() && !selected {
 			choose(key)
 		}
 		if row.Clicked() {
@@ -647,144 +597,6 @@ func (w *window) selectTreeFile(i int) {
 	}
 }
 
-// historyView lists the commits of the History tab.
-func (w *window) historyView(c *ui.Context) {
-	t := c.Theme()
-	pal := paletteFor(t)
-	q := strings.ToLower(strings.TrimSpace(w.historyFilter))
-	type entry struct {
-		local  bool
-		commit *git.Commit
-	}
-	var entries []entry
-	if q == "" {
-		entries = append(entries, entry{local: true})
-	}
-	for i := range w.history {
-		cm := &w.history[i]
-		if q == "" || strings.Contains(strings.ToLower(cm.Subject), q) || strings.HasPrefix(cm.Hash, q) || strings.Contains(strings.ToLower(cm.Author), q) {
-			entries = append(entries, entry{commit: cm})
-		}
-	}
-	target := w.source
-	current := -1
-	for i, e := range entries {
-		if (e.local && (target.kind == sourceWorkingTree || target.kind == sourceBranch)) || (e.commit != nil && target.kind == sourceCommit && target.ref == e.commit.Hash) {
-			current = i
-		}
-	}
-	open := func(i int) {
-		if i < 0 || i >= len(entries) {
-			return
-		}
-		w.commitOpen = false
-		w.historyList.ScrollIntoView(i)
-		if entries[i].local {
-			w.setSource(w.launchWorkTree())
-		} else {
-			w.setSource(source{kind: sourceCommit, ref: entries[i].commit.Hash})
-		}
-	}
-	w.historyList.Key = func(i int) any {
-		if entries[i].local {
-			return "local"
-		}
-		return entries[i].commit.Hash
-	}
-	w.historyList.Label = func(i int) string {
-		if entries[i].local {
-			return "Uncommitted changes"
-		}
-		return entries[i].commit.Subject
-	}
-	now := time.Now()
-	list := ui.List(c, &w.historyList, len(entries), func(i int) {
-		focused := w.historyList.FocusWithin(c) || w.focusHistory
-		e := entries[i]
-		row := ui.Row(c).Gap(8).Padding(5, 8).Radius(6).AlignItems(ui.Start).Role(ui.RoleButton)
-		if e.local {
-			row.Label("Uncommitted changes")
-		} else {
-			row.Label(e.commit.Subject)
-		}
-		muted, ref := t.TextMuted, pal.ref
-		switch {
-		case i == current && focused:
-			row.Background(t.Accent).TextColor(t.AccentText)
-			muted, ref = t.AccentText.Alpha(0.75), t.AccentText
-		case i == current:
-			row.Background(ui.RGBA(127, 127, 127, 0.2))
-		case row.Hovered():
-			row.Background(ui.RGBA(127, 127, 127, 0.08))
-		}
-		if (row.Pressed() || row.Clicked()) && i != current {
-			if debugFrames {
-				log.Printf("history row %d clicked", i)
-			}
-			open(i)
-		}
-		row.Children(func() {
-			if e.local {
-				ui.Text(c, "local").Font(w.codeFont()).FontSize(12).TextColor(ref).Width(56).Shrink(0)
-				ui.Text(c, "Uncommitted changes").FontSize(12).SingleLine().Grow(1)
-				return
-			}
-			cm := e.commit
-			when := w.commitTimes[cm.Hash]
-			if when.at != now.Truncate(time.Minute) {
-				// Formatted once a minute, rather than every frame.
-				when = commitTime{at: now.Truncate(time.Minute), ago: relativeTime(now, cm.Time), full: cm.Time.Format("Mon Jan 2 15:04:05 2006")}
-				w.commitTimes[cm.Hash] = when
-			}
-			ui.Text(c, cm.Short).Font(w.codeFont()).FontSize(12).TextColor(ref).Width(56).Shrink(0)
-			ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
-				ui.Text(c, cm.Subject).FontSize(12).SingleLine().Tooltip(cm.Subject)
-				ui.Row(c).Gap(6).Children(func() {
-					ui.Text(c, cm.Author).FontSize(10).SingleLine().TextColor(muted).Grow(1).MinWidth(0)
-					ui.Text(c, when.ago).FontSize(10).TextColor(muted).Shrink(0).Tooltip(when.full)
-				})
-			})
-		})
-	}).Grow(1).Padding(2, 8).Gap(1).Focusable().FocusRing(false).Label("History")
-	if w.focusHistory && w.historyList.Focus(c) {
-		w.focusHistory = false
-	}
-	list.Children(func() {
-		if len(entries) == 0 {
-			ui.Text(c, "No matching commits").FontSize(12).TextColor(t.TextMuted).Padding(12)
-		}
-	})
-	if w.historyList.Shortcut(c, 0, ui.KeyDown) {
-		open(current + 1)
-	}
-	if w.historyList.Shortcut(c, 0, ui.KeyUp) {
-		open(max(current-1, 0))
-	}
-	// More commits load well before the end comes into view, so that
-	// scrolling does not stop there.
-	if q == "" && w.historyMore && !w.historyLoading {
-		if _, last := w.historyList.Visible(); last >= len(entries)-historyPage/2 {
-			w.historyLimit += historyPage
-			w.loadHistory()
-		}
-	}
-}
-
-// commitTime is how a commit's time shows, as of a minute.
-type commitTime struct {
-	at        time.Time
-	ago, full string
-}
-
-// launchWorkTree is the source of uncommitted changes: the work tree, or
-// its comparison with a branch when the window was opened on one.
-func (w *window) launchWorkTree() source {
-	if w.launch.kind == sourceBranch {
-		return w.launch
-	}
-	return source{kind: sourceWorkingTree}
-}
-
 // relativeTime writes how long ago t was: just now, 5m ago, 3d ago; ""
 // for no time.
 func relativeTime(now, t time.Time) string {
@@ -805,46 +617,6 @@ func relativeTime(now, t time.Time) string {
 		return fmt.Sprintf("%dmo ago", int(d/(30*24*time.Hour)))
 	}
 	return fmt.Sprintf("%dy ago", int(d/(365*24*time.Hour)))
-}
-
-// sidebarFooter shows the total of the changes, and the Commit button.
-func (w *window) sidebarFooter(c *ui.Context, pal *palette) {
-	t := c.Theme()
-	adds, dels, counted := 0, 0, false
-	for i, f := range w.files {
-		if w.fileVisible(i) && countable(f) {
-			adds += f.Additions
-			dels += f.Deletions
-			counted = true
-		}
-	}
-	canCommit := w.tab == 0 && w.source.kind == sourceWorkingTree && len(w.files) > 0
-	if !(counted && w.tab == 0) && !canCommit {
-		return
-	}
-	ui.Row(c).MinHeight(40).Padding(6, 10).Gap(8).BorderWidth(1, 0, 0, 0).BorderColor(pal.cardBorder).Children(func() {
-		if counted && w.tab == 0 {
-			ui.Row(c).Gap(6).Tooltip("Total change: " + lines(adds, "added") + ", " + lines(dels, "removed")).Children(func() {
-				ui.Text(c, "Total:").FontSize(11).FontWeight(600).TextColor(t.TextMuted)
-				ui.Text(c, "+"+thousands(adds)).Font(w.codeFont()).FontSize(11).FontWeight(600).TextColor(pal.addText)
-				ui.Text(c, "-"+thousands(dels)).Font(w.codeFont()).FontSize(11).FontWeight(600).TextColor(pal.delText)
-			})
-		}
-		ui.Spacer(c)
-		if canCommit {
-			label := "Commit"
-			if w.commitOpen {
-				label = "Review"
-			}
-			b := ui.Button(c, "").Children(func() {
-				ui.Icon(c, iconCommit).FontSize(14)
-				ui.Text(c, label).SingleLine()
-			})
-			if b.Clicked() {
-				w.toggleCommit()
-			}
-		}
-	})
 }
 
 // sidebarResizer is the edge of the sidebar the user drags.

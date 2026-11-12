@@ -313,9 +313,11 @@ type storeData struct {
 	Viewed       map[string]map[string]string `json:"viewed"`
 	SidebarWidth float32                      `json:"sidebarWidth"`
 	SidebarShown *bool                        `json:"sidebarShown"`
-	// Recent are the repositories opened, the last first: File → Open
-	// Recent lists them, and the app opens the first when started without
-	// one, from the Dock.
+	// FilesWidth and FilesShown are the layout of the files pane.
+	FilesWidth float32 `json:"filesWidth"`
+	FilesShown *bool   `json:"filesShown"`
+	// Recent are the repositories opened, the last first: the app opens
+	// the first when started without one, from the Dock.
 	Recent []string `json:"recent"`
 	// Clones maps the lowercase owner/name of a GitHub repository to the
 	// local clone chosen for it.
@@ -324,7 +326,7 @@ type storeData struct {
 	LastRepository string `json:"lastRepository,omitempty"`
 }
 
-// maxRecent is how many repositories File → Open Recent lists.
+// maxRecent is how many repositories the store remembers.
 const maxRecent = 10
 
 var state = &store{}
@@ -400,6 +402,27 @@ func (s *store) setLayout(width float32, shown bool) {
 	s.save()
 }
 
+// filesLayout returns the width of the files pane, and whether it shows.
+func (s *store) filesLayout() (width float32, shown bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	width, shown = s.data.FilesWidth, true
+	if width == 0 {
+		width = filesDefault
+	}
+	if s.data.FilesShown != nil {
+		shown = *s.data.FilesShown
+	}
+	return
+}
+
+func (s *store) setFilesLayout(width float32, shown bool) {
+	s.mu.Lock()
+	s.data.FilesWidth, s.data.FilesShown = width, &shown
+	s.mu.Unlock()
+	s.save()
+}
+
 // recent returns the repositories opened, the last first.
 func (s *store) recent() []string {
 	s.mu.Lock()
@@ -421,13 +444,6 @@ func (s *store) addRecent(root string) bool {
 	s.mu.Unlock()
 	s.save()
 	return true
-}
-
-func (s *store) clearRecent() {
-	s.mu.Lock()
-	s.data.Recent = nil
-	s.mu.Unlock()
-	s.save()
 }
 
 func (s *store) save() {

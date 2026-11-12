@@ -86,8 +86,6 @@ func (f *fakeGitHub) serve(t *testing.T) {
 			fmt.Fprintf(w, `{"number":1,"title":"Greet louder","body":"<!-- template -->\nMakes the greeting shorter.","state":"open","user":{"login":"bo"},
 				"html_url":"https://github.com/acme/app/pull/1","base":{"ref":"main","sha":%q,"label":"acme:main"},
 				"head":{"ref":"greet","sha":%q,"label":"bo:greet"},"additions":3,"deletions":1,"changed_files":2,"commits":1}`, f.base, f.head)
-		case "/repos/acme/app/pulls":
-			fmt.Fprint(w, `[{"number":1,"title":"Greet louder","user":{"login":"bo"},"head":{"ref":"greet"}}]`)
 		case "/repos/acme/app/pulls/1/comments":
 			fmt.Fprint(w, f.comments)
 		case "/repos/acme/app/pulls/1/reviews":
@@ -95,10 +93,6 @@ func (f *fakeGitHub) serve(t *testing.T) {
 		case "/user":
 			fmt.Fprint(w, `{"login":"ada"}`)
 		case "/graphql":
-			if strings.Contains(string(body), "search(") {
-				fmt.Fprint(w, `{"data":{"search":{"nodes":[{"number":1,"title":"Greet louder","author":{"login":"bo"},"headRefName":"greet","reviewDecision":"CHANGES_REQUESTED"}]}}}`)
-				return
-			}
 			fmt.Fprint(w, `{"data":{"repository":{"pullRequest":{"reviewThreads":{"pageInfo":{"hasNextPage":false},"nodes":[{"id":"T1","isResolved":false,"comments":{"nodes":[{"fullDatabaseId":"1"}]}}]}}}}}`)
 		default:
 			for path, p := range f.others {
@@ -171,42 +165,6 @@ func withSettings(t *testing.T, fn func(s *Settings)) {
 	t.Cleanup(func() { cfg.Update(func(s *Settings) { *s = old }) })
 }
 
-func TestPullListKeyboard(t *testing.T) {
-	w, tt := newTestWindow(t, testRepo(t))
-	w.gh = ghRemote{repo: github.Repo{Owner: "acme", Name: "app"}, remote: "origin"}
-	w.pulls = []github.Summary{{Number: 1, Title: "First pull"}, {Number: 2, Title: "Second pull"}}
-	w.pullsLoaded, w.hold, w.tab = true, true, 2
-	tt.Frame()
-	if err := tt.Click("First pull"); err != nil {
-		t.Fatal(err)
-	}
-	if !tt.Focused("Pull requests") {
-		t.Fatal("the pull request list did not take focus")
-	}
-	check := func(number int) {
-		t.Helper()
-		if want := pullSource(w.gh.repo, number); w.source != want {
-			t.Fatalf("source %+v, want %+v", w.source, want)
-		}
-	}
-	tt.Key(0, ui.KeyDown)
-	check(2)
-	tt.Key(0, ui.KeyUp)
-	check(1)
-	w.pullsFilter = "no-such-pull"
-	tt.Frame()
-	tt.Frame()
-	tt.Key(0, ui.KeyDown)
-	check(1)
-	w.pullsFilter = ""
-	tt.Frame()
-	if err := tt.Click("First pull"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Key(0, ui.KeyDown)
-	check(2)
-}
-
 func TestPullRequest(t *testing.T) {
 	clone, base, head := pullRepo(t)
 	f := &fakeGitHub{base: base, head: head, comments: `[
@@ -231,15 +189,7 @@ func TestPullRequest(t *testing.T) {
 	tt := ui.NewTester(w.view, 1280, 1400)
 	tt.Frame()
 
-	// The tab lists the pull requests.
-	w.showPulls()
-	tt.Frame()
-	if !tt.HasText("Greet louder") {
-		t.Fatalf("no pull request in %q", tt.Texts())
-	}
-	if err := tt.Click("Greet louder"); err != nil {
-		t.Fatal(err)
-	}
+	w.setSource(pullSource(github.Repo{Owner: "acme", Name: "app"}, 1))
 	tt.Frame()
 	tt.Frame()
 	if w.source != pullSource(github.Repo{Owner: "acme", Name: "app"}, 1) || w.loadErr != nil {
@@ -594,5 +544,30 @@ func TestAINotes(t *testing.T) {
 	}
 	if !slices.ContainsFunc(w.commands(), func(c command) bool { return c.title == "Next AI Note" && c.run != nil }) {
 		t.Error("no command to go to the next note")
+	}
+}
+
+func TestPullRow(t *testing.T) {
+	freshState(t)
+	w := newWindow(nil, source{})
+	p := &github.Summary{Number: 4, Title: "Add limiter", Author: github.User{Login: "bo"}, ReviewDecision: "approved"}
+	for _, repo := range []string{"acme/api", ""} {
+		tt := ui.NewTester(func(c *ui.Context) {
+			pullRow(c, w, paletteFor(c.Theme()), p, repo, false, false)
+		}, 400, 80)
+		tt.Frame()
+		for _, want := range []string{"Add limiter", "#4", "bo"} {
+			if _, ok := tt.Find(want); !ok {
+				t.Errorf("repo %q: no %q in %q", repo, want, tt.Texts())
+			}
+		}
+		if _, ok := tt.Find("acme/api"); ok != (repo != "") {
+			t.Errorf("repo %q: acme/api shown %v in %q", repo, ok, tt.Texts())
+		}
+		repoBox, _ := tt.Find("acme/api")
+		number, _ := tt.Find("#4")
+		if repo != "" && repoBox.X >= number.X {
+			t.Errorf("the repository %+v is not before the number %+v", repoBox, number)
+		}
 	}
 }

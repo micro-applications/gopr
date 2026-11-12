@@ -52,17 +52,7 @@ func buildMenu() *mygo.Menu {
 			{Role: mygo.RoleQuit},
 		}},
 		{Label: "File", Submenu: []*mygo.MenuItem{
-			{Label: "Open Folder…", Accelerator: "CmdOrCtrl+O", Click: func(*mygo.MenuItem, *mygo.Window) { openFolder() }},
-			{Label: "Open Recent", Submenu: recentMenuItems()},
-			{Label: "Open Commit…", Accelerator: "CmdOrCtrl+Shift+C", Click: inWindow(func(w *window) { w.openDialog(dialogCommit) })},
-			{Label: "Open Branch…", Click: inWindow(func(w *window) { w.openDialog(dialogBranch) })},
-			{Label: "Open Pull Request…", Click: inWindow(func(w *window) { w.openDialog(dialogPull) })},
-			mygo.Separator(),
-			{Label: "Commit…", Accelerator: "CmdOrCtrl+Shift+Enter", Click: inWindow(func(w *window) {
-				if w.source.kind == sourceWorkingTree && !w.commitOpen && len(w.files) > 0 {
-					w.toggleCommit()
-				}
-			})},
+			{Label: "Open Pull Request…", Accelerator: "CmdOrCtrl+O", Click: inWindow(func(w *window) { w.openDialog(dialogPull) })},
 			mygo.Separator(),
 			{Label: "Open File in Editor", Accelerator: "CmdOrCtrl+Shift+O", Click: inWindow(func(w *window) { w.openCurrent() })},
 			mygo.Separator(),
@@ -85,9 +75,6 @@ func buildMenu() *mygo.Menu {
 		{Label: "View", Submenu: []*mygo.MenuItem{
 			{Label: "Command Bar…", Accelerator: "CmdOrCtrl+K", Click: inWindow(func(w *window) { w.paletteOpen = !w.paletteOpen })},
 			{Label: "Toggle Sidebar", Accelerator: "CmdOrCtrl+Shift+B", Click: inWindow(func(w *window) { w.toggleSidebar() })},
-			{Label: "Files", Accelerator: "CmdOrCtrl+1", Click: inWindow(func(w *window) { w.tab, w.sidebarShown = 0, true })},
-			{Label: "History", Accelerator: "CmdOrCtrl+2", Click: inWindow(func(w *window) { w.tab, w.sidebarShown = 1, true })},
-			{Label: "Pull Requests", Accelerator: "CmdOrCtrl+3", Click: inWindow(func(w *window) { w.showPulls() })},
 			mygo.Separator(),
 			{Label: "Review with AI", Accelerator: "CmdOrCtrl+Shift+I", Click: inWindow(func(w *window) { w.reviewWithAI() })},
 			{Label: "Group Files", Submenu: []*mygo.MenuItem{
@@ -190,40 +177,6 @@ func openFolder() {
 		}
 		closeWelcome()
 	}()
-}
-
-// recentMenuItems open the repositories opened lately, as File → Open
-// Recent.
-func recentMenuItems() []*mygo.MenuItem {
-	var items []*mygo.MenuItem
-	for _, root := range state.recent() {
-		items = append(items, &mygo.MenuItem{Label: abbreviateHome(root), ToolTip: root, Click: func(*mygo.MenuItem, *mygo.Window) {
-			go openRecent(root)
-		}})
-	}
-	if len(items) > 0 {
-		items = append(items, mygo.Separator())
-	}
-	return append(items, &mygo.MenuItem{Label: "Clear Menu", Disabled: len(items) == 0, Click: func(*mygo.MenuItem, *mygo.Window) {
-		state.clearRecent()
-		mygo.App.SetMenu(buildMenu())
-	}})
-}
-
-// openRecent opens a repository of File → Open Recent.
-func openRecent(root string) {
-	if err := openWindow(root, source{kind: sourceWorkingTree}); err != nil {
-		mygo.Dialog.Error("Could not open "+abbreviateHome(root), errorText(err))
-		return
-	}
-	closeWelcome()
-}
-
-// noteRecent puts a repository first in File → Open Recent.
-func noteRecent(root string) {
-	if state.addRecent(root) {
-		mygo.RunOnMain(func() { mygo.App.SetMenu(buildMenu()) })
-	}
 }
 
 // agentMenuItems choose the agent that reviews with AI.

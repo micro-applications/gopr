@@ -96,8 +96,8 @@ func newTestWindow(t *testing.T, dir string) (*window, *ui.Tester) {
 	w := newWindow(repo, source{})
 	w.settings = defaultSettings()
 	w.sidebarShown, w.sidebarWidth = true, sidebarDefault
+	w.filesShown, w.filesWidth = true, filesDefault
 	w.load()
-	w.loadHistory()
 	w.loadUser()
 	tt := ui.NewTester(w.view, 1280, 860)
 	tt.Frame()
@@ -209,7 +209,7 @@ func TestReviewShortcutsFromSidebar(t *testing.T) {
 }
 
 func TestReviewListReturnsAfterEmptyView(t *testing.T) {
-	for _, name := range []string{"filter", "load error", "commit"} {
+	for _, name := range []string{"filter", "load error"} {
 		t.Run(name, func(t *testing.T) {
 			w, tt := newTestWindow(t, testRepo(t))
 			switch name {
@@ -219,8 +219,6 @@ func TestReviewListReturnsAfterEmptyView(t *testing.T) {
 				w.rowsDirty = true
 			case "load error":
 				w.loadErr = errors.New("unable to load changes")
-			case "commit":
-				w.commitOpen = true
 			}
 			// A request to focus the review waits until its list returns.
 			w.focusList = true
@@ -238,7 +236,7 @@ func TestReviewListReturnsAfterEmptyView(t *testing.T) {
 				t.Fatal("review shortcuts ran while its list was hidden")
 			}
 
-			w.filter, w.loadErr, w.commitOpen = "", nil, false
+			w.filter, w.loadErr = "", nil
 			w.buildTree()
 			w.rowsDirty = true
 			tt.Frame()
@@ -270,87 +268,6 @@ func TestFind(t *testing.T) {
 	// Only the files with a match show.
 	if tt.HasText("new.go") {
 		t.Error("new.go shows while finding")
-	}
-}
-
-func TestCommit(t *testing.T) {
-	dir := testRepo(t)
-	w, tt := newTestWindow(t, dir)
-	if err := tt.Click("Commit"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
-	if !w.commitOpen {
-		t.Fatal("commit view closed")
-	}
-	tt.Type("Greet louder")
-	tt.Frame()
-	snapshot(t, tt, "commit")
-	// Leave new.go out.
-	if err := tt.Click("src/new.go"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Key(ui.Cmd, ui.KeyEnter)
-	tt.Frame()
-	if w.commitDone == "" {
-		t.Fatalf("not committed: %s %s", w.commitErr, w.commitOutput)
-	}
-	log := gitIn(t, dir, "log", "--format=%s", "-n", "1", "--name-status")
-	if !strings.Contains(log, "Greet louder") || strings.Contains(log, "new.go") || !strings.Contains(log, "D\told.txt") {
-		t.Errorf("log:\n%s", log)
-	}
-	if !strings.Contains(gitIn(t, dir, "status", "--porcelain"), "?? src/") {
-		t.Error("new.go was committed")
-	}
-}
-
-func TestHistory(t *testing.T) {
-	w, tt := newTestWindow(t, testRepo(t))
-	if err := tt.Click("History (⌘2)"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
-	if !tt.HasText("Uncommitted changes") || !tt.HasText("First commit") {
-		t.Fatalf("texts %q", tt.Texts())
-	}
-	if err := tt.Click("First commit"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
-	tt.Frame()
-	if w.source.kind != sourceCommit || len(w.files) != 3 {
-		t.Fatalf("source %+v, %d files", w.source, len(w.files))
-	}
-	snapshot(t, tt, "history")
-}
-
-func TestHistoryTakesFocus(t *testing.T) {
-	// A clean work tree: the review has no rows to take the focus as the
-	// window opens, so the history shows and takes it.
-	dir := testRepo(t)
-	gitIn(t, dir, "add", ".")
-	gitIn(t, dir, "commit", "-q", "-m", "Second commit")
-	w, tt := newTestWindow(t, dir)
-	if w.tab != 1 || !tt.Focused("History") {
-		t.Fatalf("tab %d: the history did not take the focus", w.tab)
-	}
-	// Down goes to the commit under the uncommitted changes.
-	tt.Key(0, ui.KeyDown)
-	tt.Frame()
-	if w.source.kind != sourceCommit || w.commit == nil || w.commit.Subject != "Second commit" {
-		t.Fatalf("after Down: source %+v", w.source)
-	}
-	if err := tt.Click("First commit"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
-	tt.Frame()
-	if w.source.kind != sourceCommit || len(w.rows) == 0 {
-		t.Fatalf("source %+v, %d rows", w.source, len(w.rows))
-	}
-	// The commit's rows came, but the history keeps the focus it took.
-	if !tt.Focused("History") {
-		t.Error("the history lost the focus")
 	}
 }
 
@@ -494,37 +411,6 @@ func TestParseArgs(t *testing.T) {
 	}
 	if _, err := parseArgs([]string{"nonexistent-ref"}, dir); err == nil {
 		t.Error("no error for an unknown ref")
-	}
-}
-
-func TestBranchCompare(t *testing.T) {
-	dir := testRepo(t)
-	gitIn(t, dir, "add", "-A")
-	gitIn(t, dir, "commit", "-q", "-m", "Second")
-	writeFile(t, dir, "local.txt", "uncommitted\n")
-	repo, err := git.Open(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	first := strings.TrimSpace(gitIn(t, dir, "rev-list", "--max-parents=0", "HEAD"))
-	gitIn(t, dir, "branch", "base", first)
-	w := newWindow(repo, source{kind: sourceBranch, ref: "base"})
-	w.settings = defaultSettings()
-	w.load()
-	paths := map[string]bool{}
-	for _, f := range w.files {
-		paths[f.Path] = true
-	}
-	// The commit on top of base and the uncommitted file.
-	for _, p := range []string{"main.go", "src/new.go", "old.txt", "local.txt"} {
-		if !paths[p] {
-			t.Errorf("no %s in %v", p, paths)
-		}
-	}
-	tt := ui.NewTester(w.view, 1280, 860)
-	tt.Frame()
-	if !tt.HasText("Local + branch vs base") {
-		t.Errorf("texts %q", tt.Texts())
 	}
 }
 
