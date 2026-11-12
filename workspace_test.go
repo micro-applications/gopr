@@ -247,3 +247,42 @@ func TestOpenPullError(t *testing.T) {
 		t.Errorf("bound to %s", w.repo.Root)
 	}
 }
+
+func TestOpenPullStatusOutlastsOldLoad(t *testing.T) {
+	freshState(t)
+	appClone, web, _, _ := twoRepos(t)
+	w, tt := emptyWindow(t)
+	w.hold = true
+
+	// acme/app#1 shows, its load held as it fetches.
+	w.openPull(acmeApp, 1)
+	resolveApp := w.held[0]
+	w.held = nil
+	resolveApp()
+	if w.repo == nil || w.repo.Root != appClone {
+		t.Fatalf("not bound to acme/app: %+v", w.repo)
+	}
+	appWork := w.held
+	w.held = nil
+
+	// acme/web is cloned meanwhile; acme/app's load goes on, and ends,
+	// while it clones.
+	old := resolveClone
+	resolveClone = func(_ context.Context, want github.Repo, _ string, status func(string)) (string, error) {
+		status("Cloning acme/web…")
+		w.held = appWork
+		drain(w)
+		tt.Frame()
+		if !tt.HasText("Cloning acme/web…") {
+			t.Errorf("no clone status in %q", tt.Texts())
+		}
+		return web, nil
+	}
+	t.Cleanup(func() { resolveClone = old })
+	w.openPull(acmeWeb, 1)
+	drain(w)
+	tt.Frame()
+	if w.repo.Root != web || w.source != pullSource(acmeWeb, 1) {
+		t.Fatalf("repo %s, source %+v", w.repo.Root, w.source)
+	}
+}

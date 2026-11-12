@@ -231,7 +231,7 @@ func (w *window) mainArea(c *ui.Context, pal *palette) bool {
 		})
 		return false
 	case w.opening != nil:
-		thinking(c, w.loadStatus)
+		thinking(c, w.opening.status)
 		return false
 	case w.repo == nil && w.inbox.signedOut:
 		emptyPanel(c, pal, "Sign in to GitHub", "Run gh auth login in a terminal, or set githubToken in the config file or $GH_TOKEN, to see your pull requests.", func() {

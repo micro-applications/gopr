@@ -12,6 +12,9 @@ import (
 type opening struct {
 	repo   github.Repo
 	number int
+	// status says what finding it does, as cloning: the load of the pull
+	// request shown before has a status of its own.
+	status string
 }
 
 // resolveClone returns the local clone of a repository: the one found, else
@@ -28,16 +31,15 @@ var resolveClone = func(ctx context.Context, want github.Repo, root string, stat
 // repository's clone, or clones it, and binds the window to it. The last
 // pull request chosen wins over those still opening.
 func (w *window) openPull(repo github.Repo, n int) {
-	op := &opening{repo: repo, number: n}
+	op := &opening{repo: repo, number: n, status: fmt.Sprintf("Finding %s/%s…", repo.Owner, repo.Name)}
 	w.opening = op
 	w.openErr = nil
-	w.loadStatus = fmt.Sprintf("Finding %s/%s…", repo.Owner, repo.Name)
 	root := w.settings.cloneRoot()
 	w.background(func() {
 		status := func(s string) {
 			w.update(func() {
 				if w.opening == op {
-					w.loadStatus = s
+					op.status = s
 				}
 			})
 		}
