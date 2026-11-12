@@ -194,3 +194,18 @@ func TestResolveVars(t *testing.T) {
 		t.Errorf("loop: %s, %v", out, err)
 	}
 }
+
+func TestCrop(t *testing.T) {
+	d := &Diagram{Shapes: []byte(`<svg viewBox="0 0 100 50" width="100" height="50" fill="#000" xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>`), Width: 100, Height: 50}
+	got := string(d.Crop(25, 10, 50, 20, 500, 200))
+	want := `<svg fill="#000" xmlns="http://www.w3.org/2000/svg" viewBox="25 10 50 20" width="500" height="200" preserveAspectRatio="none"><rect width="10" height="10"/></svg>`
+	if got != want {
+		t.Errorf("crop:\n got %s\nwant %s", got, want)
+	}
+	if !strings.Contains(string(d.Shapes), `viewBox="0 0 100 50"`) {
+		t.Error("the shapes changed")
+	}
+	if _, err := ui.ParseSVG(d.Crop(25, 10, 50, 20, 500, 200)); err != nil {
+		t.Error(err)
+	}
+}

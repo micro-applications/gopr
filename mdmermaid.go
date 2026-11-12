@@ -30,7 +30,14 @@ type mermaidDiagram struct {
 	// scaled are the labels shaped at the scales drawn other than 1, by the
 	// scale in hundredths: glyphs scaled as images would blur.
 	scaled map[int][]mermaidLabel
+	// tiles are the shapes cut to the tiles of a large drawing, by scale
+	// and place.
+	tiles map[mermaidTileKey]*ui.SVG
 }
+
+// mermaidTileKey is a tile of a drawing: at a scale in thousandths, the
+// tile x, y of the grid, w×h DIPs.
+type mermaidTileKey struct{ scale, x, y, w, h int }
 
 // mermaidLabel is a label shaped to draw.
 type mermaidLabel struct {
@@ -231,8 +238,8 @@ func (w *window) mermaidView(c *ui.Context, m *mermaidDiagram) {
 // drawMermaid draws a diagram in r, scaled to its width: the shapes as
 // vectors, the labels shaped at the scale, for sharp text.
 func drawMermaid(p *ui.Painter, m *mermaidDiagram, r ui.Rect) {
-	p.Image(m.shapes, r, ui.Contain)
 	s := r.W / float32(m.d.Width)
+	m.drawShapes(p, r, s)
 	labels := m.labelsAt(s)
 	// The labels are shaped at a scale rounded to hundredths.
 	k := float32(math.Round(float64(s)*100)) / 100
@@ -256,4 +263,69 @@ func drawMermaid(p *ui.Painter, m *mermaidDiagram, r ui.Rect) {
 			draw()
 		}
 	}
+}
+
+// The drawing's size, in DIPs on each side, past which its shapes draw in
+// tiles, of mermaidTile DIPs: MyGo draws an SVG as one picture, which it
+// does not draw past 4096 pixels on a side, at two pixels a DIP or more.
+const (
+	mermaidWhole = 1024
+	mermaidTile  = 512
+)
+
+// drawShapes draws the diagram's shapes in r, at scale s: as one picture
+// when small, else the tiles of it that show, each its own picture.
+func (m *mermaidDiagram) drawShapes(p *ui.Painter, r ui.Rect, s float32) {
+	if r.W*max(p.Scale(), 1) <= 2*mermaidWhole && r.H*max(p.Scale(), 1) <= 2*mermaidWhole {
+		p.Image(m.shapes, r, ui.Contain)
+		return
+	}
+	for _, t := range mermaidTiles(r, p.Visible(), s) {
+		k := mermaidTileKey{scale: int(math.Round(float64(s) * 1000)), x: t.col, y: t.row, w: int(t.rect.W), h: int(t.rect.H)}
+		svg, ok := m.tiles[k]
+		if !ok {
+			if m.tiles == nil || len(m.tiles) >= 256 {
+				m.tiles = map[mermaidTileKey]*ui.SVG{}
+			}
+			svg, _ = ui.ParseSVG(m.d.Crop(float64(t.box.X), float64(t.box.Y), float64(t.box.W), float64(t.box.H), float64(t.rect.W), float64(t.rect.H)))
+			m.tiles[k] = svg
+		}
+		if svg != nil {
+			p.Image(svg, t.rect, ui.FillBox)
+		}
+	}
+}
+
+// mermaidTileOf is a tile of a drawing: where it draws, in DIPs, and the
+// part of the drawing it shows, in its units.
+type mermaidTileOf struct {
+	col, row int
+	rect     ui.Rect
+	box      ui.Rect
+}
+
+// mermaidTiles are the tiles of a drawing drawn in r at scale s that fall
+// in visible: a grid of mermaidTile DIPs from r's corner, cut by r.
+func mermaidTiles(r, visible ui.Rect, s float32) []mermaidTileOf {
+	if s <= 0 {
+		return nil
+	}
+	x0, y0 := max(r.X, visible.X), max(r.Y, visible.Y)
+	x1, y1 := min(r.X+r.W, visible.X+visible.W), min(r.Y+r.H, visible.Y+visible.H)
+	if x1 <= x0 || y1 <= y0 {
+		return nil
+	}
+	var tiles []mermaidTileOf
+	for row := int((y0 - r.Y) / mermaidTile); float32(row)*mermaidTile < y1-r.Y; row++ {
+		for col := int((x0 - r.X) / mermaidTile); float32(col)*mermaidTile < x1-r.X; col++ {
+			tx, ty := float32(col)*mermaidTile, float32(row)*mermaidTile
+			tw, th := min(mermaidTile, r.W-tx), min(mermaidTile, r.H-ty)
+			tiles = append(tiles, mermaidTileOf{
+				col: col, row: row,
+				rect: ui.Rect{X: r.X + tx, Y: r.Y + ty, W: tw, H: th},
+				box:  ui.Rect{X: tx / s, Y: ty / s, W: tw / s, H: th / s},
+			})
+		}
+	}
+	return tiles
 }
