@@ -18,8 +18,11 @@ import (
 // Settings are the user's preferences, in ~/.gopr/gopr.jsonc as
 // codiff keeps its own in ~/.codiff/codiff.jsonc.
 type Settings struct {
-	CodeFontFamily      string `json:"codeFontFamily"`
-	CodeFontSize        int    `json:"codeFontSize"`
+	CodeFontFamily string `json:"codeFontFamily"`
+	CodeFontSize   int    `json:"codeFontSize"`
+	// CloneRoot is where pull requests' repositories are cloned, as
+	// <cloneRoot>/<owner>/<name>, and looked for, when not opened before.
+	CloneRoot           string `json:"cloneRoot"`
 	CopyCommentsOnClose bool   `json:"copyCommentsOnClose"`
 	DiffStyle           string `json:"diffStyle"` // split or unified
 	EditorCommand       string `json:"editorCommand"`
@@ -42,6 +45,7 @@ type Settings struct {
 
 func defaultSettings() Settings {
 	return Settings{
+		CloneRoot:            "~/Projects",
 		CodeFontSize:         13,
 		DiffStyle:            "split",
 		ReviewCommentsPrefix: "# Address these Review Comments",
@@ -54,6 +58,10 @@ func defaultSettings() Settings {
 func (s *Settings) normalize() {
 	d := defaultSettings()
 	s.CodeFontFamily = strings.TrimSpace(s.CodeFontFamily)
+	s.CloneRoot = strings.TrimSpace(s.CloneRoot)
+	if s.CloneRoot == "" {
+		s.CloneRoot = d.CloneRoot
+	}
 	if s.CodeFontSize == 0 {
 		s.CodeFontSize = d.CodeFontSize
 	}
@@ -75,6 +83,20 @@ func (s *Settings) normalize() {
 	if _, ok := agent.ByName(s.AIAgent); !ok {
 		s.AIAgent = ""
 	}
+}
+
+// cloneRoot is the directory repositories are cloned into, with ~ expanded.
+func (s Settings) cloneRoot() string {
+	root := s.CloneRoot
+	if root == "" {
+		root = defaultSettings().CloneRoot
+	}
+	if root == "~" || strings.HasPrefix(root, "~/") || strings.HasPrefix(root, `~\`) {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, root[1:])
+		}
+	}
+	return root
 }
 
 // config holds the settings, shared by the windows, and keeps them in
@@ -295,6 +317,9 @@ type storeData struct {
 	// Recent lists them, and the app opens the first when started without
 	// one, from the Dock.
 	Recent []string `json:"recent"`
+	// Clones maps the lowercase owner/name of a GitHub repository to the
+	// local clone chosen for it.
+	Clones map[string]string `json:"clones"`
 	// LastRepository is the repository opened last, as kept before Recent.
 	LastRepository string `json:"lastRepository,omitempty"`
 }
@@ -316,6 +341,9 @@ func (s *store) open() {
 	}
 	if s.data.Viewed == nil {
 		s.data.Viewed = map[string]map[string]string{}
+	}
+	if s.data.Clones == nil {
+		s.data.Clones = map[string]string{}
 	}
 	if len(s.data.Recent) == 0 && s.data.LastRepository != "" {
 		s.data.Recent = []string{s.data.LastRepository}

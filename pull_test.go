@@ -115,7 +115,13 @@ func (f *fakeGitHub) takeWrites() []string {
 // pull request's head as GitHub keeps it, and a clone of its main branch
 // alone, which lacks it.
 func pullRepo(t *testing.T) (clone, base, head string) {
-	server := t.TempDir()
+	_, clone, base, head = pullServer(t)
+	return clone, base, head
+}
+
+// pullServer is pullRepo with the path of the repository GitHub keeps.
+func pullServer(t *testing.T) (server, clone, base, head string) {
+	server = t.TempDir()
 	gitIn(t, server, "init", "-q", "-b", "main")
 	writeFile(t, server, "main.go", mainGo)
 	writeFile(t, server, "README.md", "# App\n")
@@ -136,7 +142,7 @@ func pullRepo(t *testing.T) (clone, base, head string) {
 	// Through git's transport, which sends what main holds alone.
 	gitIn(t, filepath.Dir(clone), "clone", "-q", "--single-branch", "--branch", "main", "file://"+server, clone)
 	gitIn(t, clone, "remote", "set-url", "origin", server)
-	return clone, base, head
+	return server, clone, base, head
 }
 
 // withSettings changes the settings for a test.
