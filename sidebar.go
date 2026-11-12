@@ -275,17 +275,22 @@ func (w *window) sidebar(c *ui.Context) {
 	})
 }
 
-// sidebarBg is the sidebar's background: none on macOS, where the
-// window's material shows through, else the theme's surface.
+// sidebarBg is the sidebar's background: in dark mode, none on macOS,
+// where the window's material shows through, else the theme's surface.
 func (w *window) sidebarBg(t *ui.Theme) ui.Color {
+	if !t.Dark {
+		// Light, a shade under the panes beside it, as Claude's desktop
+		// app has it, rather than the system's grayer material.
+		return sidebarLight
+	}
 	if runtime.GOOS == "darwin" && w.win != nil {
 		return ui.Transparent
 	}
-	if t.Dark {
-		return ui.Hex("#262628")
-	}
-	return ui.Hex("#ebebed")
+	return ui.Hex("#262628")
 }
+
+// sidebarLight is the sidebar's background in light mode.
+var sidebarLight = ui.Hex("#f3f3f1")
 
 // titleBarHeight is the height of the bars along the top, which centers
 // their controls on the traffic lights of a window with an inset title bar.

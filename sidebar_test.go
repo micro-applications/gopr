@@ -66,3 +66,14 @@ func TestFileTreeDirectoryDisclosureWaitsForRelease(t *testing.T) {
 		t.Fatal("release did not close the directory")
 	}
 }
+
+// The light sidebar is a solid shade under the panes beside it.
+func TestSidebarLight(t *testing.T) {
+	_, tt := newTestWindow(t, testRepo(t))
+	tt.Frame()
+	img := tt.Image()
+	got := img.RGBAAt(20, 600)
+	if want := sidebarLight; got.R != want.R || got.G != want.G || got.B != want.B {
+		t.Errorf("sidebar is #%02x%02x%02x, want #%02x%02x%02x", got.R, got.G, got.B, want.R, want.G, want.B)
+	}
+}
