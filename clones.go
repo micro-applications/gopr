@@ -6,7 +6,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/egoist/godiff/internal/git"
@@ -119,4 +121,72 @@ func cloneRepo(ctx context.Context, want github.Repo, root string) (string, erro
 	}
 	state.setClonePath(want, dir)
 	return dir, nil
+}
+
+// resolving are the repositories whose clones are being found or made.
+var resolving = &inflight{calls: map[string]*resolveCall{}}
+
+// inflight runs one resolve of a repository at a time: the others wait
+// for its result, and hear its status.
+type inflight struct {
+	mu    sync.Mutex
+	calls map[string]*resolveCall
+}
+
+type resolveCall struct {
+	done     chan struct{}
+	dir      string
+	err      error
+	status   string         // the last status, under inflight.mu
+	watchers []func(string) // those told of the status, under inflight.mu
+}
+
+// do runs resolve for a repository, or waits for the run already going,
+// and returns its result.
+func (f *inflight) do(ctx context.Context, want github.Repo, status func(string), resolve func(status func(string)) (string, error)) (string, error) {
+	key := cloneKey(want)
+	f.mu.Lock()
+	if c := f.calls[key]; c != nil {
+		c.watchers = append(c.watchers, status)
+		last := c.status
+		f.mu.Unlock()
+		if last != "" {
+			status(last)
+		}
+		select {
+		case <-c.done:
+			return c.dir, c.err
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+	}
+	c := &resolveCall{done: make(chan struct{}), watchers: []func(string){status}}
+	f.calls[key] = c
+	f.mu.Unlock()
+
+	c.dir, c.err = resolve(func(s string) {
+		f.mu.Lock()
+		c.status = s
+		watchers := slices.Clone(c.watchers)
+		f.mu.Unlock()
+		for _, w := range watchers {
+			w(s)
+		}
+	})
+	// A later call, as Try Again, resolves anew.
+	f.mu.Lock()
+	delete(f.calls, key)
+	f.mu.Unlock()
+	close(c.done)
+	return c.dir, c.err
+}
+
+// waiting is how many wait for the resolve of a repository, for tests.
+func (f *inflight) waiting(want github.Repo) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if c := f.calls[cloneKey(want)]; c != nil {
+		return len(c.watchers) - 1
+	}
+	return 0
 }

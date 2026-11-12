@@ -18,13 +18,16 @@ type opening struct {
 }
 
 // resolveClone returns the local clone of a repository: the one found, else
-// a new one under root, cloned as status says. Tests replace it.
+// a new one under root, cloned as status says. Two calls for one
+// repository at once share the first's work. Tests replace it.
 var resolveClone = func(ctx context.Context, want github.Repo, root string, status func(string)) (string, error) {
-	if dir := locateClone(want, root); dir != "" {
-		return dir, nil
-	}
-	status(fmt.Sprintf("Cloning %s/%s…", want.Owner, want.Name))
-	return cloneRepo(ctx, want, root)
+	return resolving.do(ctx, want, status, func(status func(string)) (string, error) {
+		if dir := locateClone(want, root); dir != "" {
+			return dir, nil
+		}
+		status(fmt.Sprintf("Cloning %s/%s…", want.Owner, want.Name))
+		return cloneRepo(ctx, want, root)
+	})
 }
 
 // openPull shows a pull request of any repository: it finds the

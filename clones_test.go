@@ -4,8 +4,11 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/egoist/godiff/internal/git"
 	"github.com/egoist/godiff/internal/github"
@@ -149,5 +152,69 @@ func TestCloneRepoRefusesExistingDir(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "acme", "app", "notes.txt")); err != nil {
 		t.Error(err)
+	}
+}
+
+func TestResolveCloneSharesClone(t *testing.T) {
+	freshState(t)
+	app := github.Repo{Owner: "acme", Name: "app"}
+	server, _, _, _ := pullServer(t)
+	fakeGitHubGit(t, server, app)
+	// The clone waits for gate: a second resolve comes meanwhile.
+	var mu sync.Mutex
+	clones := 0
+	entered, gate := make(chan struct{}, 2), make(chan struct{})
+	urlOf := cloneURL
+	cloneURL = func(r github.Repo) string {
+		mu.Lock()
+		clones++
+		mu.Unlock()
+		entered <- struct{}{}
+		<-gate
+		return urlOf(r)
+	}
+	t.Cleanup(func() { cloneURL = urlOf })
+
+	root := t.TempDir()
+	type result struct {
+		dir string
+		err error
+	}
+	results := make(chan result, 2)
+	var statuses [2][]string
+	resolve := func(i int) {
+		dir, err := resolveClone(context.Background(), app, root, func(s string) {
+			mu.Lock()
+			statuses[i] = append(statuses[i], s)
+			mu.Unlock()
+		})
+		results <- result{dir, err}
+	}
+	go resolve(0)
+	<-entered
+	go resolve(1)
+	// The second waits for the first, or, unshared, clones too.
+	deadline := time.Now().Add(5 * time.Second)
+	for resolving.waiting(app) == 0 && len(entered) == 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	close(gate)
+	a, b := <-results, <-results
+	if a.err != nil || b.err != nil {
+		t.Fatalf("errors %v, %v", a.err, b.err)
+	}
+	if want := filepath.Join(root, "acme", "app"); a.dir != want || b.dir != want {
+		t.Errorf("dirs %q, %q, want %q", a.dir, b.dir, want)
+	}
+	if clones != 1 {
+		t.Errorf("%d clones, want 1", clones)
+	}
+	for i, got := range statuses {
+		if !slices.Contains(got, "Cloning acme/app…") {
+			t.Errorf("resolve %d heard %v", i, got)
+		}
+	}
+	if resolving.waiting(app) != 0 || len(resolving.calls) != 0 {
+		t.Error("the resolve is still in flight")
 	}
 }
