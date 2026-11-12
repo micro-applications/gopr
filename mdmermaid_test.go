@@ -40,7 +40,7 @@ func TestMermaidPreview(t *testing.T) {
 	if !ok {
 		t.Fatal("no diagram shows")
 	}
-	if r.W != float32(drawn.d.Width) || r.H != float32(drawn.d.Height) {
+	if !nearly(r.W, float32(drawn.d.Width)) || !nearly(r.H, float32(drawn.d.Height)) {
 		t.Errorf("diagram %v×%v, laid out %v×%v", r.W, r.H, drawn.d.Width, drawn.d.Height)
 	}
 	var texts []string
@@ -285,7 +285,7 @@ func TestMermaidViewerMotion(t *testing.T) {
 	}
 	tt.Frame()
 	v := w.viewer
-	if v == nil || v.from != inline {
+	if v == nil || !closeRect(v.from, inline) {
 		t.Fatalf("the viewer did not open from the diagram at %+v: %+v", inline, v)
 	}
 	// It starts where the preview showed the diagram, moving.
@@ -355,4 +355,11 @@ func TestMermaidViewerMotion(t *testing.T) {
 	if open, moving := w.viewer.progress(true); open != 1 || moving {
 		t.Errorf("with less motion: open %v, moving %v", open, moving)
 	}
+}
+
+// nearly reports a and b equal but for float rounding.
+func nearly(a, b float32) bool { return math.Abs(float64(a-b)) < 0.01 }
+
+func closeRect(a, b ui.Rect) bool {
+	return nearly(a.X, b.X) && nearly(a.Y, b.Y) && nearly(a.W, b.W) && nearly(a.H, b.H)
 }

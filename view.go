@@ -35,7 +35,9 @@ func (w *window) view(c *ui.Context) {
 	// On macOS, the window shows the sidebar's material where nothing is
 	// drawn. Elsewhere it would show black, as under the translucent edge
 	// of the sidebar, so the sidebar's color is drawn there instead.
-	c.Root().Background(w.sidebarBg(t))
+	// Text everywhere reads with room between its lines, as the Markdown
+	// previews' does; code keeps its own, fixed line height.
+	c.Root().Background(w.sidebarBg(t)).LineHeight(uiLineHeight)
 
 	reviewBuilt := false
 	ui.Row(c).Fill().AlignItems(ui.Stretch).Children(func() {
@@ -77,6 +79,10 @@ func (w *window) view(c *ui.Context) {
 		w.focusList = false
 	}
 }
+
+// uiLineHeight is how far apart the lines of the interface's text are, in
+// times their size.
+const uiLineHeight = 1.4
 
 // debugFrames logs the views that take long to build.
 var debugFrames = os.Getenv("GODIFF_DEBUG") != ""

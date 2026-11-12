@@ -208,7 +208,7 @@ func (w *window) markdownWidthButtons(c *ui.Context, pal *palette) {
 // The sizes of Markdown previews' text: the default, and the least and
 // most it goes to.
 const (
-	defaultMarkdownFontSize = 15
+	defaultMarkdownFontSize = 14
 	minMarkdownFontSize     = 11
 	maxMarkdownFontSize     = 28
 )
@@ -256,7 +256,7 @@ func (w *window) markdownColumn(c *ui.Context, f *fileState) {
 		col.Children(func() {
 			o := w.markdownOptions(f.Path)
 			if size := float32(w.settings.MarkdownFontSize); o.Theme == nil || o.Theme.FontSize != size {
-				o.Theme = &markdown.Theme{FontSize: size}
+				o.Theme = markdownTheme(size)
 			}
 			markdown.View(c, strings.Join(f.newLines, "\n"), o)
 		})
@@ -315,4 +315,34 @@ func (w *window) previewFile(p string) {
 		delete(w.mdSource, p)
 	}
 	w.openFileTab(p, 0)
+}
+
+// The rhythm of Markdown previews, as a document reads rather than a
+// chat: lines a little over one and a half times the text apart, a
+// tight list's items set off a little, and headings with more room above
+// them than below. markdownLineHeight is times the font's own line
+// height, which is about 1.2 times its size.
+var (
+	markdownLineHeight   float32 = 1.6
+	markdownBlockSpacing float32 = 0.95
+	markdownItemSpacing  float32 = 0.4
+	markdownHeadings             = [6]markdown.HeadingStyle{
+		{Size: 1.6, Weight: 650, Top: 2.2, Bottom: 0.75},
+		{Size: 1.33, Weight: 600, Top: 2.5, Bottom: 0.8},
+		{Size: 1.15, Weight: 600, Top: 2.1, Bottom: 0.7},
+		{Size: 1.05, Weight: 600, Top: 1.9, Bottom: 0.6},
+		{Size: 1, Weight: 600, Top: 1.8, Bottom: 0.55},
+		{Size: 0.95, Weight: 600, Top: 1.8, Bottom: 0.55},
+	}
+)
+
+// markdownTheme is the theme of previews whose text is size DIPs.
+func markdownTheme(size float32) *markdown.Theme {
+	return &markdown.Theme{
+		FontSize:     size,
+		LineHeight:   markdownLineHeight,
+		BlockSpacing: markdownBlockSpacing,
+		ItemSpacing:  markdownItemSpacing,
+		Headings:     markdownHeadings,
+	}
 }

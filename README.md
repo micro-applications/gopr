@@ -115,7 +115,7 @@ with codiff's names, and apply to open windows as the file changes:
     "aiAgent": "",                 // claude, codex, opencode or pi; empty is the first installed
     "aiModel": "",                 // e.g. "sonnet" or "deepseek/deepseek-flash"; empty is the agent's default
     "markdownWidth": "medium",     // Markdown previews at most 640, 820 or 1080 points wide: "narrow", "medium", "wide", or "full"
-    "markdownFontSize": 15,        // the size of Markdown previews' text, 11 to 28
+    "markdownFontSize": 14,        // the size of Markdown previews' text, 11 to 28
     "reviewCommentsPrefix": "# Address these Review Comments",
     "sidebarPosition": "left",     // or "right"
     "showWhitespace": false,
