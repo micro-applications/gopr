@@ -38,7 +38,9 @@ type Settings struct {
 	AIModel string `json:"aiModel"`
 	// MarkdownWidth is how wide Markdown previews read at most: narrow,
 	// medium, wide or full.
-	MarkdownWidth        string `json:"markdownWidth"`
+	MarkdownWidth string `json:"markdownWidth"`
+	// MarkdownFontSize is the size of Markdown previews' text.
+	MarkdownFontSize     int    `json:"markdownFontSize"`
 	ReviewCommentsPrefix string `json:"reviewCommentsPrefix"`
 	SidebarPosition      string `json:"sidebarPosition"` // left or right
 	ShowWhitespace       bool   `json:"showWhitespace"`
@@ -52,6 +54,7 @@ func defaultSettings() Settings {
 		CodeFontSize:         13,
 		DiffStyle:            "split",
 		MarkdownWidth:        "medium",
+		MarkdownFontSize:     defaultMarkdownFontSize,
 		ReviewCommentsPrefix: "# Address these Review Comments",
 		SidebarPosition:      "left",
 		Theme:                "system",
@@ -73,6 +76,10 @@ func (s *Settings) normalize() {
 	if s.DiffStyle != "split" && s.DiffStyle != "unified" {
 		s.DiffStyle = d.DiffStyle
 	}
+	if s.MarkdownFontSize == 0 {
+		s.MarkdownFontSize = d.MarkdownFontSize
+	}
+	s.MarkdownFontSize = min(max(s.MarkdownFontSize, minMarkdownFontSize), maxMarkdownFontSize)
 	if markdownWidthOf(s.MarkdownWidth) == nil {
 		s.MarkdownWidth = d.MarkdownWidth
 	}

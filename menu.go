@@ -100,7 +100,7 @@ func buildMenu() *mygo.Menu {
 				{Label: "Collapse All Files", Click: inWindow(func(w *window) { w.setAllCollapsed(true) })},
 				{Label: "Expand All Files", Click: inWindow(func(w *window) { w.setAllCollapsed(false) })},
 			}},
-			{Label: "Markdown Width", Submenu: markdownWidthItems(s)},
+			{Label: "Markdown Preview", Submenu: markdownWidthItems(s)},
 			{Label: "Font Size", Submenu: []*mygo.MenuItem{
 				{Label: "Bigger", Accelerator: "CmdOrCtrl+=", Click: func(*mygo.MenuItem, *mygo.Window) { changeFontSize(1) }},
 				{Label: "Smaller", Accelerator: "CmdOrCtrl+-", Click: func(*mygo.MenuItem, *mygo.Window) { changeFontSize(-1) }},
@@ -216,5 +216,9 @@ func markdownWidthItems(s Settings) []*mygo.MenuItem {
 		items = append(items, &mygo.MenuItem{ID: "mdwidth-" + mw.key, Label: mw.name, Type: mygo.MenuItemRadio, Checked: s.MarkdownWidth == mw.key,
 			Click: func(*mygo.MenuItem, *mygo.Window) { setMarkdownWidth(mw.key) }})
 	}
-	return items
+	return append(items, mygo.Separator(),
+		&mygo.MenuItem{Label: "Bigger Text", Click: func(*mygo.MenuItem, *mygo.Window) { changeMarkdownFontSize(1) }},
+		&mygo.MenuItem{Label: "Smaller Text", Click: func(*mygo.MenuItem, *mygo.Window) { changeMarkdownFontSize(-1) }},
+		&mygo.MenuItem{Label: "Default Text Size", Click: func(*mygo.MenuItem, *mygo.Window) { changeMarkdownFontSize(0) }},
+	)
 }

@@ -2,8 +2,10 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"net/url"
 	"path"
+	"slices"
 	"strings"
 
 	"github.com/egoist/godiff/internal/diff"
@@ -143,14 +145,15 @@ func (w *window) openMarkdownLink(dir, raw string) {
 type markdownWidth struct {
 	key, name string
 	max       float32
+	icon      *ui.SVG
 }
 
 // markdownWidths are the widths a preview may read at, narrowest first.
 var markdownWidths = []markdownWidth{
-	{"narrow", "Narrow", 640},
-	{"medium", "Medium", 820},
-	{"wide", "Wide", 1080},
-	{"full", "Full Width", 0},
+	{"narrow", "Narrow", 640, iconWidthNarrow},
+	{"medium", "Medium", 820, iconWidthMedium},
+	{"wide", "Wide", 1080, iconWidthWide},
+	{"full", "Full Width", 0, iconWidthFull},
 }
 
 // markdownWidthOf is the width of a setting's value, nil for none.
@@ -174,19 +177,72 @@ func (w *window) markdownMax() float32 {
 // setMarkdownWidth makes previews read at the width of key.
 func setMarkdownWidth(key string) { cfg.Update(func(s *Settings) { s.MarkdownWidth = key }) }
 
-// markdownWidthMenu chooses the width previews read at.
-func (w *window) markdownWidthMenu(c *ui.Context) {
+// markdownWidthButtons choose the width previews read at, one icon
+// button each, the current one pressed.
+func (w *window) markdownWidthButtons(c *ui.Context, pal *palette) {
+	t := c.Theme()
 	current := markdownWidthOf(w.settings.MarkdownWidth)
 	if current == nil {
 		current = markdownWidthOf(defaultSettings().MarkdownWidth)
 	}
-	ui.MenuButton(c, current.name, func(m *ui.Menu) {
-		for _, mw := range markdownWidths {
-			if m.Item(mw.name).Checked(mw.key == current.key).Chosen() && mw.key != current.key {
-				setMarkdownWidth(mw.key)
+	choice := slices.IndexFunc(markdownWidths, func(mw markdownWidth) bool { return mw.key == current.key })
+	shown := choice
+	seg := ui.SegmentedBase(c, &choice, len(markdownWidths))
+	seg.Track.Padding(2).Gap(2).Radius(8).Background(ui.RGBA(127, 127, 127, 0.1)).Shrink(0).Label("Markdown width").Children(func() {
+		for i, mw := range markdownWidths {
+			s := seg.Segment(i).Size(30, 24).Radius(6).Center().Label(mw.name).Tooltip(mw.name).TextColor(t.TextMuted)
+			if i == shown {
+				s.Background(pal.headerBg).Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.12)).TextColor(t.Text)
 			}
+			s.OnClick(func() {
+				if i != shown {
+					setMarkdownWidth(mw.key)
+				}
+			})
+			s.Children(func() { ui.Icon(c, mw.icon).FontSize(15) })
 		}
-	}).Height(24).Shrink(0).Tooltip("Width of Markdown previews")
+	})
+}
+
+// The sizes of Markdown previews' text: the default, and the least and
+// most it goes to.
+const (
+	defaultMarkdownFontSize = 15
+	minMarkdownFontSize     = 11
+	maxMarkdownFontSize     = 28
+)
+
+// changeMarkdownFontSize makes previews' text bigger (1) or smaller (-1),
+// or of the default size (0).
+func changeMarkdownFontSize(delta int) {
+	cfg.Update(func(s *Settings) {
+		if delta == 0 {
+			s.MarkdownFontSize = defaultMarkdownFontSize
+			return
+		}
+		s.MarkdownFontSize = min(max(s.MarkdownFontSize+delta, minMarkdownFontSize), maxMarkdownFontSize)
+	})
+}
+
+// markdownFontButtons make previews' text smaller and bigger.
+func (w *window) markdownFontButtons(c *ui.Context) {
+	size := w.settings.MarkdownFontSize
+	ui.Row(c).Gap(2).Shrink(0).Label("Markdown text size").Children(func() {
+		smaller := iconButton(c, iconTextSmaller, fmt.Sprintf("Smaller Text (%d)", size)).Size(26, 24).Label("Smaller Text")
+		if size <= minMarkdownFontSize {
+			smaller.Disabled(true)
+		}
+		if smaller.Clicked() {
+			changeMarkdownFontSize(-1)
+		}
+		bigger := iconButton(c, iconTextLarger, fmt.Sprintf("Bigger Text (%d)", size)).Size(26, 24).Label("Bigger Text")
+		if size >= maxMarkdownFontSize {
+			bigger.Disabled(true)
+		}
+		if bigger.Clicked() {
+			changeMarkdownFontSize(1)
+		}
+	})
 }
 
 // markdownColumn shows a preview centered, no wider than the width chosen.
@@ -197,7 +253,11 @@ func (w *window) markdownColumn(c *ui.Context, f *fileState) {
 			col.MaxWidth(mw)
 		}
 		col.Children(func() {
-			markdown.View(c, strings.Join(f.newLines, "\n"), w.markdownOptions(f.Path))
+			o := w.markdownOptions(f.Path)
+			if size := float32(w.settings.MarkdownFontSize); o.Theme == nil || o.Theme.FontSize != size {
+				o.Theme = &markdown.Theme{FontSize: size}
+			}
+			markdown.View(c, strings.Join(f.newLines, "\n"), o)
 		})
 	})
 }

@@ -280,11 +280,13 @@ func TestMarkdownWidth(t *testing.T) {
 	if got := width(); got != 820 {
 		t.Errorf("medium preview is %v wide, want 820", got)
 	}
-	// The tab's menu chooses another width.
-	if err := tt.Click("Medium"); err != nil {
-		t.Fatal(err)
+	// The tab's icon buttons choose another width.
+	for _, mw := range markdownWidths {
+		if _, ok := tt.Find(mw.name); !ok {
+			t.Errorf("no %s button", mw.name)
+		}
 	}
-	if err := tt.ChooseMenuItem("Narrow"); err != nil {
+	if err := tt.Click("Narrow"); err != nil {
 		t.Fatal(err)
 	}
 	if w.settings.MarkdownWidth != "narrow" {
@@ -294,7 +296,9 @@ func TestMarkdownWidth(t *testing.T) {
 	if narrow != 640 {
 		t.Errorf("narrow preview is %v wide, want 640", narrow)
 	}
-	setMarkdownWidth("full")
+	if err := tt.Click("Full Width"); err != nil {
+		t.Fatal(err)
+	}
 	if full := width(); full <= 1080 {
 		t.Errorf("full-width preview is %v wide, want the tab's width", full)
 	}
@@ -312,5 +316,58 @@ func TestMarkdownWidthSetting(t *testing.T) {
 		if s.MarkdownWidth != mw.key {
 			t.Errorf("%q normalized to %q", mw.key, s.MarkdownWidth)
 		}
+	}
+}
+
+func TestMarkdownFontSize(t *testing.T) {
+	w, tt := openedReadmePull(t, `[]`)
+	old := cfg.Get()
+	t.Cleanup(func() { cfg.Update(func(s *Settings) { *s = old }) })
+	off := cfg.OnChange(func(s Settings) { w.applySettings(s) })
+	t.Cleanup(off)
+	w.previewFile("README.md")
+
+	height := func() float32 {
+		t.Helper()
+		tt.Frame()
+		r, ok := tt.Find("Preview column")
+		if !ok {
+			t.Fatal("no preview column")
+		}
+		return r.H
+	}
+	if w.settings.MarkdownFontSize != defaultMarkdownFontSize {
+		t.Fatalf("size %d, want %d", w.settings.MarkdownFontSize, defaultMarkdownFontSize)
+	}
+	before := height()
+	for range 3 {
+		if err := tt.Click("Bigger Text"); err != nil {
+			t.Fatal(err)
+		}
+		tt.Frame()
+	}
+	if got := w.settings.MarkdownFontSize; got != defaultMarkdownFontSize+3 {
+		t.Errorf("size %d after three clicks, want %d", got, defaultMarkdownFontSize+3)
+	}
+	if after := height(); after <= before {
+		t.Errorf("preview %v tall at the bigger size, %v before", after, before)
+	}
+	if err := tt.Click("Smaller Text"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if got := w.settings.MarkdownFontSize; got != defaultMarkdownFontSize+2 {
+		t.Errorf("size %d after Smaller, want %d", got, defaultMarkdownFontSize+2)
+	}
+	changeMarkdownFontSize(0)
+	if got := height(); got != before {
+		t.Errorf("default size is %v tall, want %v", got, before)
+	}
+	// It stays within its bounds.
+	for range 40 {
+		changeMarkdownFontSize(1)
+	}
+	if got := cfg.Get().MarkdownFontSize; got != maxMarkdownFontSize {
+		t.Errorf("size %d, want at most %d", got, maxMarkdownFontSize)
 	}
 }

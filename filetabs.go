@@ -255,7 +255,8 @@ func (w *window) fileView(c *ui.Context, pal *palette, tab *fileTab) {
 			BorderWidth(0, 0, 1, 0).BorderColor(pal.cardBorder).Children(func() {
 			ui.Spacer(c)
 			if !w.mdSource[f.Path] && !tab.finding {
-				w.markdownWidthMenu(c)
+				w.markdownFontButtons(c)
+				w.markdownWidthButtons(c, pal)
 			}
 			w.sourceToggle(c, pal, f.Path)
 		})

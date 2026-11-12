@@ -32,9 +32,10 @@ your disk, or clones it, and shows the pull request there.
   whole contents in a tab beside the diff, and close the tab when done.
 - **Markdown preview** of `.md`, `.markdown` and `.mdx` files in their tabs
   (Changes always shows their diff; a card's **Preview** button opens the
-  tab). Previews are centered at a readable width: Narrow, Medium (the
-  default), Wide or Full Width, from the tab's header, **View → Markdown
-  Width** or the command bar.
+  tab). Previews are centered at a readable width — Narrow, Medium (the
+  default), Wide or Full Width — and their text can be made bigger or
+  smaller, from the icon buttons in the tab's header, **View → Markdown
+  Preview** or the command bar.
 - **Viewed files**: marking a file viewed collapses it, and it opens again
   once it changes. Generated files (lockfiles, `*.min.js`,
   `linguist-generated`, …) and dependency folders start collapsed.
@@ -105,6 +106,7 @@ with codiff's names, and apply to open windows as the file changes:
     "aiAgent": "",                 // claude, codex, opencode or pi; empty is the first installed
     "aiModel": "",                 // e.g. "sonnet" or "deepseek/deepseek-flash"; empty is the agent's default
     "markdownWidth": "medium",     // Markdown previews at most 640, 820 or 1080 points wide: "narrow", "medium", "wide", or "full"
+    "markdownFontSize": 15,        // the size of Markdown previews' text, 11 to 28
     "reviewCommentsPrefix": "# Address these Review Comments",
     "sidebarPosition": "left",     // or "right"
     "showWhitespace": false,
