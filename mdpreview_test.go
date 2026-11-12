@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -129,8 +131,44 @@ func TestMarkdownImagePathEscape(t *testing.T) {
 	}
 }
 
+func TestImagePath(t *testing.T) {
+	for _, tc := range []struct{ dir, url, want string }{
+		{"docs", "../img/a.png", "img/a.png"},
+		{"docs", "a.png", "docs/a.png"},
+		{"docs", "./b/../a.png", "docs/a.png"},
+		{".", "img/a.png", "img/a.png"},
+		{"docs", "a%20b.png", "docs/a b.png"},
+	} {
+		if got, err := imagePath(tc.dir, tc.url); err != nil || got != tc.want {
+			t.Errorf("imagePath(%q, %q) = %q, %v; want %q", tc.dir, tc.url, got, err, tc.want)
+		}
+	}
+	for _, tc := range []struct{ dir, url string }{
+		{"docs", "../../x"},
+		{".", "../x.png"},
+		{"docs", "/etc/passwd"},
+		{"docs", "//h/x"},
+		{"docs", "https://x/y"},
+		{"docs", "data:image/png;base64,AAAA"},
+		{"docs", `a\b`},
+		{".", ".."},
+		{"docs", ".."},
+		{"docs", ""},
+	} {
+		if got, err := imagePath(tc.dir, tc.url); err == nil {
+			t.Errorf("imagePath(%q, %q) = %q, want an error", tc.dir, tc.url, got)
+		}
+	}
+}
+
 func TestMarkdownImageAtHead(t *testing.T) {
-	dir := t.TempDir()
+	// A picture beside the repository, which ../ from its root reaches.
+	outside := t.TempDir()
+	writeFile(t, outside, "secret.svg", `<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"><rect width="4" height="4"/></svg>`)
+	dir := filepath.Join(outside, "repo")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	gitIn(t, dir, "init", "-q", "-b", "main")
 	gitIn(t, dir, "config", "user.name", "Ada")
 	gitIn(t, dir, "config", "user.email", "ada@example.com")
@@ -151,6 +189,10 @@ func TestMarkdownImageAtHead(t *testing.T) {
 		}
 		if _, err := o.LoadImage("../img/missing.svg"); err == nil {
 			t.Errorf("rev %q: a missing picture loaded", rev)
+		}
+		// Out of the repository, from its root.
+		if _, err := w.markdownOptions("README.md").LoadImage("../secret.svg"); err == nil {
+			t.Errorf("rev %q: a picture out of the repository loaded", rev)
 		}
 	}
 }
