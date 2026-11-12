@@ -286,3 +286,20 @@ func TestOpenPullStatusOutlastsOldLoad(t *testing.T) {
 		t.Fatalf("repo %s, source %+v", w.repo.Root, w.source)
 	}
 }
+
+func TestOpenPullAgainAfterLoadFailed(t *testing.T) {
+	freshState(t)
+	clone, base, head := pullClone(t, acmeApp)
+	(&fakeGitHub{base: base, head: head, comments: `[]`}).serve(t)
+	fakeResolve(t, map[github.Repo]string{acmeApp: realPath(t, clone)})
+	w, tt := emptyWindow(t)
+	w.openPull(acmeApp, 1)
+	tt.Frame()
+	// The load failed, as when offline; the pull request is opened again.
+	w.loadErr = errors.New("offline")
+	w.openPull(acmeApp, 1)
+	tt.Frame()
+	if w.loadErr != nil || len(w.files) == 0 {
+		t.Errorf("not loaded again: error %v, %d files", w.loadErr, len(w.files))
+	}
+}

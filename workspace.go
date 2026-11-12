@@ -66,8 +66,9 @@ func (w *window) openPull(repo github.Repo, n int) {
 			if rebound {
 				w.bindRepo(found, repo)
 			}
-			if rebound && w.source == src {
-				// bindRepo made the load of the source stale.
+			if w.source == src && (rebound || w.loadErr != nil) {
+				// bindRepo made the load of the source stale, or it failed:
+				// opening it again is trying again.
 				w.load()
 				return
 			}
