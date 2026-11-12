@@ -142,6 +142,26 @@ func TestFileTabFromHunk(t *testing.T) {
 	}
 }
 
+func TestPaletteFindsInFileTab(t *testing.T) {
+	w, tt := openedPull(t)
+	tt.Key(0, ui.KeyJ)
+	tt.Frame()
+	tt.Key(0, ui.KeyF)
+	tt.Frame()
+	if w.activeTab != 1 {
+		t.Fatalf("active tab %d, want main.go's", w.activeTab)
+	}
+	i := slices.IndexFunc(w.commands(), func(c command) bool { return c.title == "Find in Diffs" })
+	if i < 0 {
+		t.Fatal("no Find in Diffs command")
+	}
+	w.commands()[i].run()
+	tt.Frame()
+	if w.finding || !w.fileTabs[0].finding {
+		t.Errorf("diff's find bar %v, the file's %v; want the file's", w.finding, w.fileTabs[0].finding)
+	}
+}
+
 func TestFileTabNotForDeleted(t *testing.T) {
 	w, tt := newTestWindow(t, testRepo(t))
 	tt.Frame()

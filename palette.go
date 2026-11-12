@@ -44,7 +44,7 @@ func (w *window) commands() []command {
 	}
 	return []command{
 		{title: "Focus File Filter", keys: "⌘P", run: w.focusFilter},
-		{title: "Find in Diffs", keys: "⌘F", run: func() { w.finding = true }},
+		{title: "Find in Diffs", keys: "⌘F", run: func() { *w.findOpen() = true }},
 		{title: "Open Pull Request", hint: "Review a pull request on GitHub", keys: "⌘O", run: func() { w.openDialog(dialogPull) }},
 		{title: "Toggle Files", keys: "⌘⇧E", run: w.toggleFiles},
 		{title: "Review with AI", hint: w.agentHint(), keys: "⌘⇧I", run: w.reviewWithAI},
