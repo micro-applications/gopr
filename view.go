@@ -99,10 +99,12 @@ func (w *window) toolbar(c *ui.Context, pal *palette) {
 			w.sidebarToggle(c)
 		}
 		// The repository: its name, and where it is.
-		ui.Column(c).Gap(1).Shrink(1).MinWidth(0).Tooltip(w.repo.Root).Children(func() {
-			ui.Text(c, filepath.Base(w.repo.Root)).FontSize(13).Bold().SingleLine()
-			ui.Text(c, filepath.Dir(abbreviateHome(w.repo.Root))).FontSize(11).TextColor(t.TextMuted).SingleLine()
-		})
+		if w.repo != nil {
+			ui.Column(c).Gap(1).Shrink(1).MinWidth(0).Tooltip(w.repo.Root).Children(func() {
+				ui.Text(c, filepath.Base(w.repo.Root)).FontSize(13).Bold().SingleLine()
+				ui.Text(c, filepath.Dir(abbreviateHome(w.repo.Root))).FontSize(11).TextColor(t.TextMuted).SingleLine()
+			})
+		}
 		if w.branch != "" && w.source.kind != sourcePull {
 			chip(c, pal, iconBranch, w.branch, t.TextMuted).Tooltip("Branch " + w.branch)
 		}
@@ -207,6 +209,24 @@ func (w *window) layoutControl(c *ui.Context, pal *palette) {
 // and reports whether it built the review list in this pass.
 func (w *window) mainArea(c *ui.Context, pal *palette) bool {
 	t := c.Theme()
+	// A pull request being opened, or not opened, shows in place of the
+	// review.
+	switch {
+	case w.openErr != nil:
+		op := w.opening
+		emptyPanel(c, pal, "Unable to open the pull request", errorText(w.openErr), func() {
+			if ui.Button(c, "Try Again").Clicked() {
+				w.openPull(op.repo, op.number)
+			}
+		})
+		return false
+	case w.opening != nil:
+		thinking(c, w.loadStatus)
+		return false
+	case w.repo == nil:
+		emptyPanel(c, pal, "Choose a pull request", "Your pull requests and the ones waiting on your review are in the sidebar.", nil)
+		return false
+	}
 	if w.commitOpen && w.source.kind == sourceWorkingTree {
 		w.commitView(c)
 		return false

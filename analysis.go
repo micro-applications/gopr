@@ -95,6 +95,9 @@ type savedAnalysis struct {
 
 // loadAnalysis reads the review saved of a source, once.
 func (w *window) loadAnalysis(src source) {
+	if w.repo == nil {
+		return
+	}
 	st := w.analysisFor(src)
 	if st.checked {
 		return
@@ -146,7 +149,8 @@ func (w *window) runAnalysis() {
 	if st.running || len(w.files) == 0 || w.loading {
 		return
 	}
-	req := agent.Request{Dir: w.repo.Root, Model: w.settings.AIModel}
+	repo := w.repo
+	req := agent.Request{Dir: repo.Root, Model: w.settings.AIModel}
 	var base, head string
 	switch src.kind {
 	case sourceWorkingTree:
@@ -200,7 +204,7 @@ func (w *window) runAnalysis() {
 		// The files' descriptions read no state the main thread changes.
 		req.Files = analysisFiles(files)
 		if base != "" && head != "" {
-			req.Commits = w.repo.Subjects(base, head, 100)
+			req.Commits = repo.Subjects(base, head, 100)
 		}
 		last := ""
 		an, err := runAgent(ctx, a, req, func(s string) {

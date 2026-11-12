@@ -53,14 +53,22 @@ func TestKindOf(t *testing.T) {
 	}
 }
 
-// fakeGitHub answers as GitHub's API does for acme/app#1, and records
-// the writes.
+// fakeGitHub answers as GitHub's API does for acme/app#1, and the pull
+// requests of others, and records the writes.
 type fakeGitHub struct {
 	mu       sync.Mutex
 	base     string
 	head     string
 	comments string
 	writes   []string
+	// others are more pull requests, by their path in the API, as
+	// /repos/acme/web/pulls/1.
+	others map[string]fakePull
+}
+
+// fakePull is a pull request fakeGitHub answers for, without threads.
+type fakePull struct {
+	title, base, head string
 }
 
 func (f *fakeGitHub) serve(t *testing.T) {
@@ -93,6 +101,17 @@ func (f *fakeGitHub) serve(t *testing.T) {
 			}
 			fmt.Fprint(w, `{"data":{"repository":{"pullRequest":{"reviewThreads":{"pageInfo":{"hasNextPage":false},"nodes":[{"id":"T1","isResolved":false,"comments":{"nodes":[{"fullDatabaseId":"1"}]}}]}}}}}`)
 		default:
+			for path, p := range f.others {
+				switch r.URL.Path {
+				case path:
+					fmt.Fprintf(w, `{"number":1,"title":%q,"body":"","state":"open","user":{"login":"bo"},
+						"base":{"ref":"main","sha":%q,"label":"acme:main"},"head":{"ref":"change","sha":%q,"label":"bo:change"}}`, p.title, p.base, p.head)
+					return
+				case path + "/comments", path + "/reviews":
+					fmt.Fprint(w, `[]`)
+					return
+				}
+			}
 			w.WriteHeader(http.StatusNotFound)
 			fmt.Fprint(w, `{"message":"Not Found"}`)
 		}

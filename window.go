@@ -195,6 +195,11 @@ type window struct {
 	changed   bool
 	signature string
 	help      bool
+
+	// The pull request whose repository is being found, and why it could
+	// not be.
+	opening *opening
+	openErr error
 }
 
 var (
@@ -225,7 +230,7 @@ func openWindow(dir string, src source) error {
 	// A repository already open comes to the front.
 	windowsMu.Lock()
 	for _, w := range windows {
-		if w.repo.Root == repo.Root && w.launch == src {
+		if w.repo != nil && w.repo.Root == repo.Root && w.launch == src {
 			windowsMu.Unlock()
 			w.win.Show()
 			w.win.Focus()
@@ -280,7 +285,7 @@ func openWindow(dir string, src source) error {
 }
 
 // newWindow makes the state of a window reviewing a source of a
-// repository.
+// repository, or of a window waiting for a pull request, for a nil repo.
 func newWindow(repo *git.Repo, src source) *window {
 	width, shown := state.layout()
 	w := &window{
@@ -291,7 +296,7 @@ func newWindow(repo *git.Repo, src source) *window {
 		sidebarShown: shown,
 		sidebarWidth: width,
 		historyLimit: historyPage,
-		viewed:       state.viewed(viewedKey(repo.Root, src)),
+		viewed:       map[string]string{},
 		hscroll:      map[string]float32{},
 		closedDirs:   map[string]bool{},
 		commitTimes:  map[string]commitTime{},
@@ -302,11 +307,14 @@ func newWindow(repo *git.Repo, src source) *window {
 		prs:          map[source]*pullState{},
 		analyses:     map[source]*analysisState{},
 	}
-	w.gh, _ = findGitHubRemote(repo, github.Repo{})
-	if src.kind == sourcePull {
-		w.pr = w.pullFor(src)
+	if repo != nil {
+		w.viewed = state.viewed(viewedKey(repo.Root, src))
+		w.gh, _ = findGitHubRemote(repo, github.Repo{})
+		if src.kind == sourcePull {
+			w.pr = w.pullFor(src)
+		}
+		w.loadAnalysis(src)
 	}
-	w.loadAnalysis(src)
 	w.dragWidth = w.sidebarWidth
 	w.list.Key = func(i int) any { return w.key(&w.rows[i]) }
 	w.list.Header = func(i int) bool { return w.rows[i].kind == rowHeader }
@@ -442,8 +450,10 @@ func (w *window) switchTo(src source) {
 	}
 	if w.viewed == nil {
 		w.viewed = map[string]string{}
-		if key := viewedKey(w.repo.Root, src); key != "" {
-			w.viewed = state.viewed(key)
+		if w.repo != nil {
+			if key := viewedKey(w.repo.Root, src); key != "" {
+				w.viewed = state.viewed(key)
+			}
 		}
 	}
 	w.source = src
@@ -461,7 +471,7 @@ func (w *window) switchTo(src source) {
 	w.finding, w.query = false, ""
 	w.hscroll = map[string]float32{}
 	w.current = 0
-	if w.win != nil {
+	if w.win != nil && w.repo != nil {
 		w.win.SetTitle(windowTitle(w.repo.Root, src))
 	}
 }
@@ -474,6 +484,10 @@ const preloadBudget = 80 * time.Millisecond
 // load reads the changes of the source, the contents of the first files
 // within preloadBudget, then the contents of the others.
 func (w *window) load() {
+	if w.repo == nil {
+		return
+	}
+	repo := w.repo
 	w.gen++
 	gen := w.gen
 	src := w.source
@@ -514,28 +528,28 @@ func (w *window) load() {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				branch = w.repo.Branch()
+				branch = repo.Branch()
 			}()
 		}
 		sig := ""
 		switch src.kind {
 		case sourceWorkingTree:
-			sig = w.repo.StatusSignature()
-			files, err = w.repo.WorkingTree(opts)
+			sig = repo.StatusSignature()
+			files, err = repo.WorkingTree(opts)
 		case sourceCommit:
 			if commit == nil {
 				var c git.Commit
-				c, err = w.repo.CommitInfo(src.ref)
+				c, err = repo.CommitInfo(src.ref)
 				commit = &c
 			}
 			if err == nil {
-				files, err = w.repo.CommitDiff(*commit, opts)
+				files, err = repo.CommitDiff(*commit, opts)
 			}
 		case sourceBranch:
-			sig = w.repo.StatusSignature()
-			files, base, err = w.repo.Compare(src.ref, opts)
+			sig = repo.StatusSignature()
+			files, base, err = repo.Compare(src.ref, opts)
 		case sourcePull:
-			pulled, err = w.fetchPull(gen, src, remote, opts)
+			pulled, err = w.fetchPull(gen, repo, src, remote, opts)
 			files, base = pulled.files, pulled.mergeBase
 		}
 		wg.Wait()
@@ -543,7 +557,7 @@ func (w *window) load() {
 		var oldRev, newRev string
 		switch src.kind {
 		case sourceWorkingTree:
-			if w.repo.HasHead() {
+			if repo.HasHead() {
 				oldRev = "HEAD"
 			}
 		case sourceCommit:
@@ -565,7 +579,7 @@ func (w *window) load() {
 				}
 			}
 			if budget := preloadBudget - time.Since(started); budget > 0 {
-				pre = w.preload(fresh, oldRev, newRev, budget)
+				pre = w.preload(repo, fresh, oldRev, newRev, budget)
 			}
 		}
 		w.update(func() {
@@ -610,7 +624,7 @@ func (w *window) load() {
 					}
 				}
 				if len(rest) > 0 {
-					w.background(func() { w.loadContents(gen, oldRev, newRev, rest) })
+					w.background(func() { w.loadContents(gen, repo, oldRev, newRev, rest) })
 				}
 			}
 		})
@@ -619,11 +633,11 @@ func (w *window) load() {
 
 // preload reads and colors the contents of files, in order, until
 // budget runs out: the files it did not finish load later, as they come.
-func (w *window) preload(files []*diff.File, oldRev, newRev string, budget time.Duration) map[string]loaded {
+func (w *window) preload(repo *git.Repo, files []*diff.File, oldRev, newRev string, budget time.Duration) map[string]loaded {
 	if len(files) == 0 {
 		return nil
 	}
-	contents, err := w.repo.NewContents()
+	contents, err := repo.NewContents()
 	if err != nil {
 		return nil
 	}
@@ -637,7 +651,7 @@ func (w *window) preload(files []*diff.File, oldRev, newRev string, budget time.
 			if stop.Load() {
 				return
 			}
-			l := w.read(contents, f, oldRev, newRev)
+			l := read(repo, contents, f, oldRev, newRev)
 			l.finish()
 			select {
 			case results <- l:
@@ -733,14 +747,14 @@ type loaded struct {
 	path, oldPath      string
 }
 
-// read reads both sides of a file: lines of text, or the data of a
-// picture.
-func (w *window) read(contents *git.Contents, f *diff.File, oldRev, newRev string) loaded {
+// read reads both sides of a file of a repository: lines of text, or the
+// data of a picture.
+func read(repo *git.Repo, contents *git.Contents, f *diff.File, oldRev, newRev string) loaded {
 	l := loaded{path: f.Path, oldPath: f.OldPath}
 	raw := func(rev, path string, limit int) []byte {
 		var data []byte
 		if rev == "" {
-			data = w.repo.ReadWorkTree(path)
+			data = repo.ReadWorkTree(path)
 		} else {
 			data, _ = contents.Read(rev, path)
 		}
@@ -820,9 +834,9 @@ func isImage(path string) bool {
 
 // loadContents reads both sides of the files, for their colors and their
 // unchanged lines, and shows them as they come.
-func (w *window) loadContents(gen int, oldRev, newRev string, files []*fileState) {
+func (w *window) loadContents(gen int, repo *git.Repo, oldRev, newRev string, files []*fileState) {
 	defer boostGC()()
-	contents, err := w.repo.NewContents()
+	contents, err := repo.NewContents()
 	if err != nil {
 		return
 	}
@@ -849,7 +863,7 @@ func (w *window) loadContents(gen int, oldRev, newRev string, files []*fileState
 			if w.stale(gen) {
 				return
 			}
-			job := w.read(contents, f.File, oldRev, newRev)
+			job := read(repo, contents, f.File, oldRev, newRev)
 			job.file = f
 			jobs <- job
 		}
@@ -926,25 +940,40 @@ func (w *window) stale(gen int) bool { return w.genA.Load() != int64(gen) }
 // loadUser reads the name of the git user, which comments show, off the
 // main thread: running git takes a while.
 func (w *window) loadUser() {
+	repo := w.repo
+	if repo == nil {
+		return
+	}
 	w.background(func() {
-		name := strings.TrimSpace(w.repo.ConfigValue("user.name"))
+		name := strings.TrimSpace(repo.ConfigValue("user.name"))
 		if name == "" {
-			name = strings.TrimSpace(w.repo.ConfigValue("user.email"))
+			name = strings.TrimSpace(repo.ConfigValue("user.email"))
 		}
-		w.update(func() { w.user = name })
+		w.update(func() {
+			if w.repo == repo {
+				w.user = name
+			}
+		})
 	})
 }
 
 // loadHistory reads the commits of the History tab.
 func (w *window) loadHistory() {
+	repo := w.repo
+	if repo == nil {
+		return
+	}
 	limit := w.historyLimit
 	w.historyLoading = true
 	w.background(func() {
-		commits, err := w.repo.Log(0, limit)
+		commits, err := repo.Log(0, limit)
 		if err != nil {
 			commits = nil
 		}
 		w.update(func() {
+			if w.repo != repo {
+				return
+			}
 			w.history = commits
 			w.historyMore = len(commits) >= limit
 			w.historyLoading = false
@@ -976,7 +1005,11 @@ func (w *window) checkChanges() {
 	var src source
 	var sig string
 	var busy bool
-	mygo.RunOnMain(func() { src, sig, busy = w.source, w.signature, w.loading || w.changed })
+	var repo *git.Repo
+	mygo.RunOnMain(func() { src, sig, busy, repo = w.source, w.signature, w.loading || w.changed, w.repo })
+	if repo == nil {
+		return
+	}
 	if src.kind == sourcePull && !busy {
 		w.checkPull(src)
 		return
@@ -984,7 +1017,7 @@ func (w *window) checkChanges() {
 	if busy || sig == "" || src.kind == sourceCommit {
 		return
 	}
-	if now := w.repo.StatusSignature(); now != sig {
+	if now := repo.StatusSignature(); now != sig {
 		w.win.Update(func() {
 			if w.source == src && !w.loading {
 				w.changed = true

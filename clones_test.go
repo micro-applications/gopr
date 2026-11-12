@@ -27,15 +27,25 @@ func freshState(t *testing.T) {
 // repo on GitHub, and cloneURL name it so.
 func fakeGitHubGit(t *testing.T, server string, repo github.Repo) {
 	t.Helper()
-	url := "https://github.com/" + repo.Owner + "/" + repo.Name + ".git"
+	fakeGitHubGits(t, map[github.Repo]string{repo: server})
+}
+
+// fakeGitHubGits is fakeGitHubGit for several repositories at once: git
+// reads one global config, so they all go in it.
+func fakeGitHubGits(t *testing.T, servers map[github.Repo]string) {
+	t.Helper()
+	urlOf := func(r github.Repo) string { return "https://github.com/" + r.Owner + "/" + r.Name + ".git" }
+	var conf strings.Builder
+	for repo, server := range servers {
+		conf.WriteString("[url \"" + server + "\"]\n\tinsteadOf = " + urlOf(repo) + "\n")
+	}
 	rc := filepath.Join(t.TempDir(), "gitconfig")
-	conf := "[url \"" + server + "\"]\n\tinsteadOf = " + url + "\n"
-	if err := os.WriteFile(rc, []byte(conf), 0o644); err != nil {
+	if err := os.WriteFile(rc, []byte(conf.String()), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("GIT_CONFIG_GLOBAL", rc)
 	old := cloneURL
-	cloneURL = func(github.Repo) string { return url }
+	cloneURL = urlOf
 	t.Cleanup(func() { cloneURL = old })
 }
 
