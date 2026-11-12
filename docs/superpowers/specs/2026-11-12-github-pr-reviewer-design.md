@@ -1,4 +1,4 @@
-# Godiff as a GitHub PR reviewer — design
+# GoPR: Godiff as a GitHub PR reviewer — design
 
 Date: 2026-11-12
 
@@ -13,7 +13,7 @@ changed Markdown rendered.
 Godiff already reviews a PR well (grouped files, review threads, comments,
 review submission, AI review), but only for the GitHub remote of the
 repository a window has open, and each repository gets its own window. This
-work turns Godiff into a **single-window PR reviewer**: an inbox of PRs in
+work turns Godiff into **GoPR**, a **single-window PR reviewer**: an inbox of PRs in
 the sidebar, and a PR workspace on the right. The user said explicitly that
 the current behavior does not need to be kept.
 
@@ -49,7 +49,7 @@ today's PR review surface and moved into the workspace with Part 1.
 Layout:
 
 ```
-┌──────────────── Godiff ────────────────────────────────────────────┐
+┌──────────────── GoPR ──────────────────────────────────────────────┐
 │ [Orgs ▾] [7 days ▾] ⟳ │ acme/api #412 · Add rate limiter  (header) │
 │ filter…               │ ┌ Changes ┬ limiter.go ┬ README.md ┐       │
 │ ▾ My pull requests  3 │ │ file tree │ diff surface             │  │
@@ -87,12 +87,17 @@ Layout:
   user said the current behavior need not be kept; this is the reading that
   matches "a single window with PRs in the sidebar." The code under
   `internal/` (git, diff, highlight, agent, github) stays.
-- **Command line (user decision: the command is `gopr`).** Godiff →
-  Install Command Line Tool… installs `gopr` instead of `godiff`. `gopr`,
+- **Name (user decision): the app is GoPR and its command is `gopr`.**
+  `mygo.json` `name` becomes `GoPR`; menus, window title and README follow.
+  GoPR → Install Command Line Tool… installs `gopr` instead of `godiff`. `gopr`,
   with no argument, opens or focuses the window. `gopr owner/repo#123` and
   `gopr https://github.com/owner/repo/pull/123` open that PR's workspace (it
   need not be in the inbox). Other arguments (commits, branches, paths) are
-  dropped, with a message. *My call:* the app itself keeps the name Godiff.
+  dropped, with a message.
+  *My calls:* the bundle identifier becomes `dev.egoist.gopr`; settings and
+  the store move to `~/.gopr/` (`gopr.jsonc`), copied once from `~/.godiff/`
+  when the new folder doesn't exist; the Go module path and repository name
+  stay `godiff`.
 - "My pull requests" = open PRs authored by the signed-in user. "Waiting on
   my review" = open, non-draft PRs where the user's review is requested,
   directly or through a team (`review-requested:@me`). PRs the user already
@@ -106,7 +111,7 @@ Layout:
 - One GitHub account, the one Godiff already finds (`githubToken()`): there
   is no multi-account support.
 - Period, orgs, section collapse state, and sidebar width are saved in the
-  store (`~/.godiff`) and survive restarts.
+  store (`~/.gopr`) and survive restarts.
 - Refresh: on window focus if older than 5 minutes, on the refresh button,
   and on ⌘R. No polling timer.
 - Viewed-file state stays keyed per repository and PR (`viewedKey`), so it
