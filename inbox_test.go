@@ -221,20 +221,58 @@ func TestInboxError(t *testing.T) {
 }
 
 func TestInboxKeyboard(t *testing.T) {
+	web := github.Repo{Owner: "acme", Name: "web"}
+	for _, cloned := range []bool{false, true} {
+		t.Run(map[bool]string{false: "not cloned", true: "cloned"}[cloned], func(t *testing.T) {
+			freshState(t)
+			if cloned {
+				state.setClonePath(web, t.TempDir())
+			}
+			asked := recordResolve(t)
+			w, tt := inboxWindow(t, twoSections())
+			if err := tt.Click("Add limiter"); err != nil {
+				t.Fatal(err)
+			}
+			tt.Frame()
+			*asked = nil
+			// Down crosses into the next section.
+			tt.Key(0, ui.KeyDown)
+			tt.Frame()
+			if w.inbox.sel != "acme/web#9" {
+				t.Fatalf("chosen %q", w.inbox.sel)
+			}
+			if cloned {
+				if !slices.Equal(*asked, []github.Repo{web}) {
+					t.Fatalf("resolved %v, want %v", *asked, web)
+				}
+				return
+			}
+			if len(*asked) != 0 {
+				t.Fatalf("down resolved %v without a clone", *asked)
+			}
+			tt.Key(0, ui.KeyEnter)
+			tt.Frame()
+			if !slices.Equal(*asked, []github.Repo{web}) {
+				t.Fatalf("Enter resolved %v, want %v", *asked, web)
+			}
+		})
+	}
+}
+
+func TestInboxClickWhileOpening(t *testing.T) {
 	freshState(t)
 	asked := recordResolve(t)
 	w, tt := inboxWindow(t, twoSections())
-	if err := tt.Click("Add limiter"); err != nil {
-		t.Fatal(err)
+	w.hold = true
+	for range 2 {
+		if err := tt.Click("Add limiter"); err != nil {
+			t.Fatal(err)
+		}
+		tt.Frame()
 	}
-	tt.Frame()
-	tt.Key(0, ui.KeyDown)
-	tt.Frame()
-	if w.inbox.sel != "acme/web#9" {
-		t.Fatalf("chosen %q", w.inbox.sel)
-	}
-	if want := (github.Repo{Owner: "acme", Name: "web"}); len(*asked) == 0 || (*asked)[len(*asked)-1] != want {
-		t.Errorf("resolved %v, want %v last", *asked, want)
+	drain(w)
+	if len(*asked) != 1 {
+		t.Fatalf("resolved %v, want one", *asked)
 	}
 }
 

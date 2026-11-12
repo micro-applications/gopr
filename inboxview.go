@@ -187,9 +187,11 @@ func (w *window) inboxBody(c *ui.Context) {
 	items := w.inboxItems()
 	choose := func(p *github.InboxPull) {
 		in.sel = inboxKey(p)
-		if w.source != pullSource(p.Repo, p.Number) || w.openErr != nil {
-			w.openPull(p.Repo, p.Number)
+		if w.openErr == nil && (w.source == pullSource(p.Repo, p.Number) ||
+			w.opening != nil && w.opening.repo == p.Repo && w.opening.number == p.Number) {
+			return // shown, or opening
 		}
+		w.openPull(p.Repo, p.Number)
 	}
 	in.list.Key = func(i int) any {
 		it := items[i]
@@ -243,11 +245,21 @@ func (w *window) inboxBody(c *ui.Context) {
 			pulls = append(pulls, i)
 		}
 	}
+	// A move opens the pull request when its repository needs no clone:
+	// else Enter opens it, as a click does.
 	move := func(j int) {
 		if j >= 0 && j < len(pulls) {
-			choose(items[pulls[j]].pull)
+			p := items[pulls[j]].pull
+			if w.hasClone(p.Repo) {
+				choose(p)
+			} else {
+				in.sel = inboxKey(p)
+			}
 			in.list.ScrollIntoView(pulls[j])
 		}
+	}
+	if at >= 0 && in.list.Shortcut(c, 0, ui.KeyEnter) {
+		choose(items[pulls[at]].pull)
 	}
 	if in.list.Shortcut(c, 0, ui.KeyDown) {
 		move(at + 1)
@@ -261,6 +273,12 @@ func (w *window) inboxBody(c *ui.Context) {
 	if in.list.Shortcut(c, 0, ui.KeyEnd) {
 		move(len(pulls) - 1)
 	}
+}
+
+// hasClone reports whether a repository is known on disk: the window's
+// own, or a clone kept in the store.
+func (w *window) hasClone(repo github.Repo) bool {
+	return (w.gh.ok() && strings.EqualFold(w.gh.repo.String(), repo.String())) || state.clonePath(repo) != ""
 }
 
 // inboxSectionHeader is a section's title, which collapses it, and its
