@@ -439,6 +439,9 @@ func (w *window) fileTree(c *ui.Context) {
 		}
 		if !n.dir && n.file < len(w.files) && canViewFull(w.files[n.file]) {
 			path := w.files[n.file].Path
+			if row.DoubleClicked() {
+				w.openFileTab(path, 0)
+			}
 			row.ContextMenu(func(m *ui.Menu) {
 				if m.Item("View Full File").Chosen() {
 					w.openFileTab(path, 0)

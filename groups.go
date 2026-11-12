@@ -552,10 +552,6 @@ func (w *window) revealNote(n *aiNote) {
 	if f := w.files[fi]; f.collapsed && !w.forceOpen(fi) {
 		f.collapsed = false
 	}
-	if !n.file && w.previewing(w.files[fi]) {
-		// A note on a line shows in Diff, as the line does.
-		w.setMarkdownDiff(fi, true)
-	}
 	w.rowsDirty = true
 	w.buildRows()
 	for i := range w.rows {

@@ -34,8 +34,11 @@ type Settings struct {
 	// providers, as the AI Review card chooses it; empty for its own
 	// default, which for OpenCode is the one its own interface starts
 	// with.
-	AIAgent              string `json:"aiAgent"`
-	AIModel              string `json:"aiModel"`
+	AIAgent string `json:"aiAgent"`
+	AIModel string `json:"aiModel"`
+	// MarkdownWidth is how wide Markdown previews read at most: narrow,
+	// medium, wide or full.
+	MarkdownWidth        string `json:"markdownWidth"`
 	ReviewCommentsPrefix string `json:"reviewCommentsPrefix"`
 	SidebarPosition      string `json:"sidebarPosition"` // left or right
 	ShowWhitespace       bool   `json:"showWhitespace"`
@@ -48,6 +51,7 @@ func defaultSettings() Settings {
 		CloneRoot:            "~/Projects",
 		CodeFontSize:         13,
 		DiffStyle:            "split",
+		MarkdownWidth:        "medium",
 		ReviewCommentsPrefix: "# Address these Review Comments",
 		SidebarPosition:      "left",
 		Theme:                "system",
@@ -68,6 +72,9 @@ func (s *Settings) normalize() {
 	s.CodeFontSize = min(max(s.CodeFontSize, 10), 32)
 	if s.DiffStyle != "split" && s.DiffStyle != "unified" {
 		s.DiffStyle = d.DiffStyle
+	}
+	if markdownWidthOf(s.MarkdownWidth) == nil {
+		s.MarkdownWidth = d.MarkdownWidth
 	}
 	if s.SidebarPosition != "left" && s.SidebarPosition != "right" {
 		s.SidebarPosition = d.SidebarPosition

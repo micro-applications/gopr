@@ -51,32 +51,35 @@ func openedReadmePull(t *testing.T, comments string) (*window, *ui.Tester) {
 
 func TestMarkdownPreview(t *testing.T) {
 	w, tt := openedReadmePull(t, `[]`)
-	if !tt.HasText("Some bold text") {
-		t.Errorf("the preview lacks the rendered text: %q", tt.Texts())
+	// Changes shows the diff alone.
+	if !tt.HasText("Some **bold** text") {
+		t.Errorf("Changes lacks the diff's lines: %q", tt.Texts())
 	}
-	if tt.HasText("**bold**") {
-		t.Error("the Markdown's source shows in Preview")
+	if tt.HasText("Some bold text") {
+		t.Error("Changes shows the rendered preview")
 	}
-	if err := tt.Click("Diff"); err != nil {
+	// The header's Preview opens the file rendered, in a tab.
+	if err := tt.Click("Preview"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !w.mdDiff["README.md"] {
-		t.Error("Diff is not chosen")
+	if w.activeTab == 0 || w.fileTabs[w.activeTab-1].path != "README.md" {
+		t.Fatalf("Preview opened tab %d of %d", w.activeTab, len(w.fileTabs))
 	}
-	if !tt.HasText("**bold**") {
-		t.Errorf("the diff lacks the source: %q", tt.Texts())
+	if !tt.HasText("Some bold text") || tt.HasText("**bold**") {
+		t.Errorf("the tab does not show the preview: %q", tt.Texts())
 	}
 
-	// Another pull request starts in Preview again.
+	// Another pull request starts afresh.
+	w.mdSource = map[string]bool{"README.md": true}
 	w.openPull(acmeApp, 2)
 	tt.Frame()
-	if len(w.mdDiff) != 0 || len(w.mdSource) != 0 || len(w.mdOpts) != 0 {
-		t.Errorf("choices kept: diff %v, source %v, %d options", w.mdDiff, w.mdSource, len(w.mdOpts))
+	if len(w.mdSource) != 0 || len(w.mdOpts) != 0 {
+		t.Errorf("choices kept: source %v, %d options", w.mdSource, len(w.mdOpts))
 	}
 }
 
-func TestMarkdownThreadCount(t *testing.T) {
+func TestMarkdownThreadInChanges(t *testing.T) {
 	w, tt := openedReadmePull(t, `[
 		{"id":1,"path":"README.md","side":"RIGHT","line":3,"user":{"login":"cy"},"body":"Bolder?","created_at":"2026-10-01T10:00:00Z"}]`)
 	for range 3 {
@@ -85,15 +88,12 @@ func TestMarkdownThreadCount(t *testing.T) {
 	if n := w.openThreads("README.md"); n != 1 {
 		t.Fatalf("%d open threads on README.md", n)
 	}
-	if !tt.HasText("Diff · 1") {
-		t.Errorf("no Diff · 1 in %q", tt.Texts())
-	}
-	if tt.HasText("Bolder?") {
-		t.Error("the thread shows in Preview")
+	if !tt.HasText("Bolder?") {
+		t.Errorf("the thread does not show under its line: %q", tt.Texts())
 	}
 }
 
-func TestMarkdownSkipsHunkNav(t *testing.T) {
+func TestMarkdownHunkNav(t *testing.T) {
 	w, tt := openedReadmePull(t, `[]`)
 	readme := slices.IndexFunc(w.files, func(f *fileState) bool { return f.Path == "README.md" })
 	main := slices.IndexFunc(w.files, func(f *fileState) bool { return f.Path == "main.go" })
@@ -102,19 +102,8 @@ func TestMarkdownSkipsHunkNav(t *testing.T) {
 	}
 	tt.Key(0, ui.KeyJ)
 	tt.Frame()
-	if w.selFile != main || w.selHunk < 0 {
-		t.Errorf("J chose file %d hunk %d, want main.go (%d)", w.selFile, w.selHunk, main)
-	}
-
-	// In Diff, J stops at README.md's hunk first.
-	w.setMarkdownDiff(readme, true)
-	w.selFile, w.selHunk = -1, -1
-	w.list.ScrollTo(0, ui.Start)
-	tt.Frame()
-	tt.Key(0, ui.KeyJ)
-	tt.Frame()
-	if w.selFile != readme {
-		t.Errorf("J in Diff chose file %d, want README.md (%d)", w.selFile, readme)
+	if w.selFile != readme || w.selHunk < 0 {
+		t.Errorf("J chose file %d hunk %d, want README.md (%d)", w.selFile, w.selHunk, readme)
 	}
 }
 
@@ -248,7 +237,7 @@ func TestMarkdownDeletedShowsDiff(t *testing.T) {
 	}
 }
 
-func TestMarkdownNoteShowsDiff(t *testing.T) {
+func TestMarkdownNoteInChanges(t *testing.T) {
 	w, tt := openedReadmePull(t, `[]`)
 	note := &aiNote{path: "README.md", side: sideNew, line: 3, text: "Bolder?"}
 	w.notes = map[string][]*aiNote{"README.md": {note}}
@@ -256,8 +245,8 @@ func TestMarkdownNoteShowsDiff(t *testing.T) {
 	tt.Frame()
 	tt.Key(0, ui.KeyN)
 	tt.Frame()
-	if w.noteSel != note || !w.mdDiff["README.md"] {
-		t.Fatalf("note %+v, Diff chosen %v", w.noteSel, w.mdDiff["README.md"])
+	if w.noteSel != note {
+		t.Fatalf("note %+v", w.noteSel)
 	}
 	first, last := w.list.Visible()
 	shown := false
@@ -266,5 +255,62 @@ func TestMarkdownNoteShowsDiff(t *testing.T) {
 	}
 	if !shown || !tt.HasText("Bolder?") {
 		t.Errorf("the note does not show: %q", tt.Texts())
+	}
+}
+
+func TestMarkdownWidth(t *testing.T) {
+	w, tt := openedReadmePull(t, `[]`)
+	old := cfg.Get()
+	t.Cleanup(func() { cfg.Update(func(s *Settings) { *s = old }) })
+	off := cfg.OnChange(func(s Settings) { w.applySettings(s) })
+	t.Cleanup(off)
+	// A big screen, where the tab is wider than any limit.
+	tt.SetSize(2400, 1200)
+	w.previewFile("README.md")
+
+	width := func() float32 {
+		t.Helper()
+		tt.Frame()
+		r, ok := tt.Find("Preview column")
+		if !ok {
+			t.Fatal("no preview column")
+		}
+		return r.W
+	}
+	if got := width(); got != 820 {
+		t.Errorf("medium preview is %v wide, want 820", got)
+	}
+	// The tab's menu chooses another width.
+	if err := tt.Click("Medium"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem("Narrow"); err != nil {
+		t.Fatal(err)
+	}
+	if w.settings.MarkdownWidth != "narrow" {
+		t.Fatalf("width %q, want narrow", w.settings.MarkdownWidth)
+	}
+	narrow := width()
+	if narrow != 640 {
+		t.Errorf("narrow preview is %v wide, want 640", narrow)
+	}
+	setMarkdownWidth("full")
+	if full := width(); full <= 1080 {
+		t.Errorf("full-width preview is %v wide, want the tab's width", full)
+	}
+}
+
+func TestMarkdownWidthSetting(t *testing.T) {
+	s := Settings{MarkdownWidth: "huge"}
+	s.normalize()
+	if s.MarkdownWidth != "medium" {
+		t.Errorf("unknown width normalized to %q, want medium", s.MarkdownWidth)
+	}
+	for _, mw := range markdownWidths {
+		s := Settings{MarkdownWidth: mw.key}
+		s.normalize()
+		if s.MarkdownWidth != mw.key {
+			t.Errorf("%q normalized to %q", mw.key, s.MarkdownWidth)
+		}
 	}
 }

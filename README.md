@@ -27,9 +27,14 @@ your disk, or clones it, and shows the pull request there.
 - **Split and unified diffs** with syntax highlighting (codiff's Licht and
   Dunkel palettes), word-level change highlighting, and unchanged lines that
   expand 100 at a time or all at once. Pictures show as previews.
-- **Full-file tabs**: open a file's whole contents beside the diff, and close
-  the tab when done.
-- **Markdown preview** of `.md`, `.markdown` and `.mdx` files.
+- **Full-file tabs**: double-click a file in the files pane (or use its
+  card's button, its context menu, or <kbd>F</kbd> on a hunk) to read its
+  whole contents in a tab beside the diff, and close the tab when done.
+- **Markdown preview** of `.md`, `.markdown` and `.mdx` files in their tabs
+  (Changes always shows their diff; a card's **Preview** button opens the
+  tab). Previews are centered at a readable width: Narrow, Medium (the
+  default), Wide or Full Width, from the tab's header, **View → Markdown
+  Width** or the command bar.
 - **Viewed files**: marking a file viewed collapses it, and it opens again
   once it changes. Generated files (lockfiles, `*.min.js`,
   `linguist-generated`, …) and dependency folders start collapsed.
@@ -99,6 +104,7 @@ with codiff's names, and apply to open windows as the file changes:
     "githubToken": "",             // empty uses the GitHub CLI's (gh auth login)
     "aiAgent": "",                 // claude, codex, opencode or pi; empty is the first installed
     "aiModel": "",                 // e.g. "sonnet" or "deepseek/deepseek-flash"; empty is the agent's default
+    "markdownWidth": "medium",     // Markdown previews at most 640, 820 or 1080 points wide: "narrow", "medium", "wide", or "full"
     "reviewCommentsPrefix": "# Address these Review Comments",
     "sidebarPosition": "left",     // or "right"
     "showWhitespace": false,

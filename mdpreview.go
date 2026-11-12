@@ -28,32 +28,6 @@ func canPreview(f *fileState) bool {
 	return isMarkdown(f.Path) && f.Status != diff.Deleted && !f.Binary && !f.Directory
 }
 
-// previewing reports whether Changes shows a file rendered rather than
-// its lines.
-func (w *window) previewing(f *fileState) bool {
-	return canPreview(f) && !w.mdDiff[f.Path]
-}
-
-// setMarkdownDiff shows file fi's lines in Changes (on), or its preview.
-func (w *window) setMarkdownDiff(fi int, on bool) {
-	if fi < 0 || fi >= len(w.files) {
-		return
-	}
-	if w.mdDiff == nil {
-		w.mdDiff = map[string]bool{}
-	}
-	w.mdDiff[w.files[fi].Path] = on
-	// The hunk chosen with j and k does not show in the preview.
-	if !on && w.selFile == fi {
-		w.selFile, w.selHunk = -1, -1
-	}
-	// The preview's lines are not found by the find bar: find again.
-	if w.searching() {
-		w.matchesFor = "\x00"
-	}
-	w.rowsDirty = true
-}
-
 // errNoImage is why a picture of a preview does not load.
 var errNoImage = errors.New("no such picture in the pull request")
 
@@ -164,17 +138,67 @@ func (w *window) openMarkdownLink(dir, raw string) {
 	}
 }
 
-// markdownRow shows a changed Markdown file rendered, in its card.
-func (w *window) markdownRow(c *ui.Context, pal *palette, f *fileState) {
-	w.card(c, pal).Padding(14, 24, 18).Children(func() {
-		switch {
-		case !f.loaded:
-			ui.Text(c, "Loading…").FontSize(12).TextColor(pal.gapText)
-		case f.newLines == nil:
-			ui.Text(c, "This file cannot be shown.").FontSize(12).TextColor(pal.gapText)
-		default:
-			markdown.View(c, strings.Join(f.newLines, "\n"), w.markdownOptions(f.Path)).Grow(1).MinWidth(0)
+// markdownWidth is a width Markdown previews read at: its setting's
+// value, its name, and its widest, 0 for the whole view.
+type markdownWidth struct {
+	key, name string
+	max       float32
+}
+
+// markdownWidths are the widths a preview may read at, narrowest first.
+var markdownWidths = []markdownWidth{
+	{"narrow", "Narrow", 640},
+	{"medium", "Medium", 820},
+	{"wide", "Wide", 1080},
+	{"full", "Full Width", 0},
+}
+
+// markdownWidthOf is the width of a setting's value, nil for none.
+func markdownWidthOf(key string) *markdownWidth {
+	for i := range markdownWidths {
+		if markdownWidths[i].key == key {
+			return &markdownWidths[i]
 		}
+	}
+	return nil
+}
+
+// markdownMax is how wide the previews read at most, 0 for no limit.
+func (w *window) markdownMax() float32 {
+	if mw := markdownWidthOf(w.settings.MarkdownWidth); mw != nil {
+		return mw.max
+	}
+	return markdownWidthOf(defaultSettings().MarkdownWidth).max
+}
+
+// setMarkdownWidth makes previews read at the width of key.
+func setMarkdownWidth(key string) { cfg.Update(func(s *Settings) { s.MarkdownWidth = key }) }
+
+// markdownWidthMenu chooses the width previews read at.
+func (w *window) markdownWidthMenu(c *ui.Context) {
+	current := markdownWidthOf(w.settings.MarkdownWidth)
+	if current == nil {
+		current = markdownWidthOf(defaultSettings().MarkdownWidth)
+	}
+	ui.MenuButton(c, current.name, func(m *ui.Menu) {
+		for _, mw := range markdownWidths {
+			if m.Item(mw.name).Checked(mw.key == current.key).Chosen() && mw.key != current.key {
+				setMarkdownWidth(mw.key)
+			}
+		}
+	}).Height(24).Shrink(0).Tooltip("Width of Markdown previews")
+}
+
+// markdownColumn shows a preview centered, no wider than the width chosen.
+func (w *window) markdownColumn(c *ui.Context, f *fileState) {
+	ui.Row(c).Justify(ui.Center).Grow(1).MinWidth(0).Children(func() {
+		col := ui.Column(c).Grow(1).MinWidth(0).Label("Preview column")
+		if mw := w.markdownMax(); mw > 0 {
+			col.MaxWidth(mw)
+		}
+		col.Children(func() {
+			markdown.View(c, strings.Join(f.newLines, "\n"), w.markdownOptions(f.Path))
+		})
 	})
 }
 
@@ -201,22 +225,6 @@ func previewToggle(c *ui.Context, pal *palette, label string, names, texts [2]st
 	})
 }
 
-// diffToggle is the Preview/Diff switch of a Markdown file's header; Diff
-// counts the file's unresolved threads, which show there alone.
-func (w *window) diffToggle(c *ui.Context, pal *palette, idx int, f *fileState) {
-	choice := 0
-	if w.mdDiff[f.Path] {
-		choice = 1
-	}
-	diffText := "Diff"
-	if n := w.openThreads(f.Path); n > 0 {
-		diffText = "Diff · " + itoa(n)
-	}
-	previewToggle(c, pal, "Show "+f.Name()+" as", [2]string{"Preview", "Diff"}, [2]string{"Preview", diffText}, choice, func(to int) {
-		w.setMarkdownDiff(idx, to == 1)
-	})
-}
-
 // sourceToggle is the Preview/Source switch of a Markdown file's tab.
 func (w *window) sourceToggle(c *ui.Context, pal *palette, p string) {
 	choice := 0
@@ -235,7 +243,15 @@ func (w *window) sourceToggle(c *ui.Context, pal *palette, p string) {
 func (w *window) markdownTab(c *ui.Context, pal *palette, f *fileState) {
 	ui.Scroll(c).Grow(1).MinHeight(0).Background(pal.codeBg).Label("Preview " + f.Path).Children(func() {
 		ui.Column(c).Padding(16, 28, 32).Children(func() {
-			markdown.View(c, strings.Join(f.newLines, "\n"), w.markdownOptions(f.Path))
+			w.markdownColumn(c, f)
 		})
 	})
+}
+
+// previewFile shows a Markdown file rendered, in its tab.
+func (w *window) previewFile(p string) {
+	if w.mdSource != nil {
+		delete(w.mdSource, p)
+	}
+	w.openFileTab(p, 0)
 }

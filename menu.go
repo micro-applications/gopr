@@ -100,6 +100,7 @@ func buildMenu() *mygo.Menu {
 				{Label: "Collapse All Files", Click: inWindow(func(w *window) { w.setAllCollapsed(true) })},
 				{Label: "Expand All Files", Click: inWindow(func(w *window) { w.setAllCollapsed(false) })},
 			}},
+			{Label: "Markdown Width", Submenu: markdownWidthItems(s)},
 			{Label: "Font Size", Submenu: []*mygo.MenuItem{
 				{Label: "Bigger", Accelerator: "CmdOrCtrl+=", Click: func(*mygo.MenuItem, *mygo.Window) { changeFontSize(1) }},
 				{Label: "Smaller", Accelerator: "CmdOrCtrl+-", Click: func(*mygo.MenuItem, *mygo.Window) { changeFontSize(-1) }},
@@ -161,6 +162,9 @@ func syncMenu(s Settings) {
 	set("split", s.DiffStyle == "split")
 	set("unified", s.DiffStyle == "unified")
 	set("wrap", s.WordWrap)
+	for _, mw := range markdownWidths {
+		set("mdwidth-"+mw.key, s.MarkdownWidth == mw.key)
+	}
 	set("whitespace", s.ShowWhitespace)
 	set("copyOnClose", s.CopyCommentsOnClose)
 	set("theme-system", s.Theme == "system")
@@ -201,6 +205,16 @@ func agentMenuItems(s Settings) []*mygo.MenuItem {
 	}
 	for _, a := range agent.All {
 		items = append(items, &mygo.MenuItem{ID: "agent-" + a.Name, Label: a.Label, Type: mygo.MenuItemRadio, Checked: s.AIAgent == a.Name, Click: choose(a.Name)})
+	}
+	return items
+}
+
+// markdownWidthItems choose the width Markdown previews read at.
+func markdownWidthItems(s Settings) []*mygo.MenuItem {
+	var items []*mygo.MenuItem
+	for _, mw := range markdownWidths {
+		items = append(items, &mygo.MenuItem{ID: "mdwidth-" + mw.key, Label: mw.name, Type: mygo.MenuItemRadio, Checked: s.MarkdownWidth == mw.key,
+			Click: func(*mygo.MenuItem, *mygo.Window) { setMarkdownWidth(mw.key) }})
 	}
 	return items
 }
