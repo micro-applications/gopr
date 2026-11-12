@@ -194,6 +194,9 @@ func (w *window) fileHeader(c *ui.Context, pal *palette, idx int, f *fileState, 
 		if m.Item("Copy Path").Chosen() {
 			c.WriteClipboard(f.Path)
 		}
+		if canViewFull(f) && m.Item("View Full File").Chosen() {
+			w.openFileTab(f.Path, 0)
+		}
 		if m.Item("Viewed").Checked(viewed).Chosen() {
 			w.setViewed(f, !viewed)
 		}
@@ -251,6 +254,9 @@ func (w *window) fileHeader(c *ui.Context, pal *palette, idx int, f *fileState, 
 		if cp.Clicked() {
 			c.WriteClipboard(f.Path)
 			c.Toast("Copied " + f.Name())
+		}
+		if canViewFull(f) && iconButton(c, iconFile, "View Full File").Clicked() {
+			w.openFileTab(f.Path, 0)
 		}
 		open := iconButton(c, iconOpen, "Open file in editor").Disabled(f.Status == diff.Deleted || f.Directory)
 		if f.Status == diff.Deleted {

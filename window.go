@@ -118,6 +118,14 @@ type window struct {
 	matchesFor  string
 	fileMatches map[int]bool
 
+	// The tabs of whole files, and the one shown: 0 for the changes, i for
+	// fileTabs[i-1].
+	fileTabs  []fileTab
+	activeTab int
+	// The revisions of the old and the new side of the last load; "" is
+	// the work tree.
+	oldRev, newRev string
+
 	// The reviews of the other sources.
 	sessions map[source]*session
 
@@ -415,6 +423,7 @@ func (w *window) switchTo(src source) {
 	w.list = ui.ListState{Key: w.list.Key, Header: w.list.Header}
 	w.selFile, w.selHunk = -1, -1
 	w.finding, w.query = false, ""
+	w.fileTabs, w.activeTab = nil, 0
 	w.hscroll = map[string]float32{}
 	w.current = 0
 	if w.win != nil && w.repo != nil {
@@ -541,6 +550,7 @@ func (w *window) load() {
 				w.loadReviews()
 			}
 			w.base = base
+			w.oldRev, w.newRev = oldRev, newRev
 			w.setFiles(files)
 			for _, f := range w.files {
 				if l, ok := pre[f.Path]; ok && !f.loaded {

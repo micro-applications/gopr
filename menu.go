@@ -56,7 +56,7 @@ func buildMenu() *mygo.Menu {
 			mygo.Separator(),
 			{Label: "Open File in Editor", Accelerator: "CmdOrCtrl+Shift+O", Click: inWindow(func(w *window) { w.openCurrent() })},
 			mygo.Separator(),
-			{Role: mygo.RoleClose},
+			{Label: "Close", Accelerator: "CmdOrCtrl+W", Click: closeTabOrWindow},
 		}},
 		{Label: "Edit", Submenu: []*mygo.MenuItem{
 			{Role: mygo.RoleUndo},
@@ -67,7 +67,7 @@ func buildMenu() *mygo.Menu {
 			{Role: mygo.RolePaste},
 			{Role: mygo.RoleSelectAll},
 			mygo.Separator(),
-			{Label: "Find in Diffs", Accelerator: "CmdOrCtrl+F", Click: inWindow(func(w *window) { w.finding = true })},
+			{Label: "Find in Diffs", Accelerator: "CmdOrCtrl+F", Click: inWindow(func(w *window) { *w.findOpen() = true })},
 			{Label: "Filter Files", Accelerator: "CmdOrCtrl+P", Click: inWindow(func(w *window) { w.focusFilter() })},
 			mygo.Separator(),
 			{Label: "Copy Review Comments", Accelerator: "CmdOrCtrl+Shift+M", Click: inWindow(func(w *window) { w.copyComments() })},
@@ -120,12 +120,32 @@ func buildMenu() *mygo.Menu {
 			mygo.Separator(),
 			{Role: mygo.RoleToggleFullScreen},
 		}},
-		{Role: mygo.RoleWindowMenu},
+		{Role: mygo.RoleWindowMenu, Submenu: windowMenuItems()},
 		{Role: mygo.RoleHelp, Submenu: []*mygo.MenuItem{
 			{Label: "Keyboard Shortcuts", Click: inWindow(func(w *window) { w.help = true })},
 		}},
 	})
 	return appMenu
+}
+
+// closeTabOrWindow closes the file's tab shown, else the window.
+func closeTabOrWindow(_ *mygo.MenuItem, win *mygo.Window) {
+	w := focused(win)
+	switch {
+	case w != nil && w.activeTab > 0:
+		w.win.Update(func() { w.closeFileTab(w.activeTab) })
+	case win != nil:
+		win.Close()
+	}
+}
+
+// windowMenuItems are the items of the Window menu: MyGo's, apart from
+// the Close it has off macOS, which the File menu's Close does.
+func windowMenuItems() []*mygo.MenuItem {
+	if runtime.GOOS == "darwin" {
+		return nil
+	}
+	return []*mygo.MenuItem{{Role: mygo.RoleMinimize}}
 }
 
 // syncMenu shows the settings in the menu's check marks.

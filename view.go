@@ -137,8 +137,13 @@ func (w *window) toolbar(c *ui.Context, pal *palette) {
 				w.toggleFiles()
 			}
 		}
-		if iconButton(c, iconSearch, "Find in diffs (⌘F)").Clicked() {
-			w.finding = !w.finding
+		findTip := "Find in diffs (⌘F)"
+		if w.activeTab > 0 {
+			findTip = "Find in file (⌘F)"
+		}
+		if iconButton(c, iconSearch, findTip).Clicked() {
+			open := w.findOpen()
+			*open = !*open
 		}
 		n := w.pendingComments()
 		copied := time.Since(w.copiedAt) < 2*time.Second
@@ -246,6 +251,13 @@ func (w *window) mainArea(c *ui.Context, pal *palette) bool {
 			w.filesResizer(c, pal)
 		}
 		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
+			if len(w.fileTabs) > 0 {
+				w.fileTabRow(c, pal)
+			}
+			if w.activeTab > 0 && w.activeTab <= len(w.fileTabs) {
+				w.fileView(c, pal, &w.fileTabs[w.activeTab-1])
+				return
+			}
 			built = w.review(c, pal)
 		})
 	})
@@ -414,6 +426,11 @@ func (w *window) shortcuts(c *ui.Context, reviewBuilt bool) {
 	if c.Shortcut(ui.Cmd|ui.Shift, ui.KeyE) {
 		w.toggleFiles()
 	}
+	// The menu's Close takes ⌘W where there is a menu bar: this is for
+	// the windows without one, and closes a file's tab only.
+	if w.activeTab > 0 && c.Shortcut(ui.Cmd, ui.KeyW) {
+		w.closeFileTab(w.activeTab)
+	}
 	// Keys that type text belong to the fields: these work while no field
 	// had the focus in the last frame.
 	typing := w.typing
@@ -438,6 +455,9 @@ func (w *window) shortcuts(c *ui.Context, reviewBuilt bool) {
 	}
 	if (w.selHunk >= 0 || w.noteSel != nil) && c.Shortcut(0, ui.KeyEscape) {
 		w.selFile, w.selHunk, w.noteSel = -1, -1, nil
+	}
+	if c.Shortcut(0, ui.KeyF) {
+		w.viewSelectedHunk()
 	}
 	if c.Shortcut(ui.Alt, ui.KeyZ) {
 		toggleWrap()

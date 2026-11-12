@@ -437,6 +437,14 @@ func (w *window) fileTree(c *ui.Context) {
 			}
 			choose(key)
 		}
+		if !n.dir && n.file < len(w.files) && canViewFull(w.files[n.file]) {
+			path := w.files[n.file].Path
+			row.ContextMenu(func(m *ui.Menu) {
+				if m.Item("View Full File").Chosen() {
+					w.openFileTab(path, 0)
+				}
+			})
+		}
 		muted := t.TextMuted
 		if selected && focused {
 			muted = t.AccentText.Alpha(0.8)
