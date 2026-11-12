@@ -70,3 +70,19 @@ func TestWindowTitle(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+func TestNewConfigDoesNotMigrate(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	old := filepath.Join(home, ".godiff", "godiff.jsonc")
+	os.MkdirAll(filepath.Dir(old), 0o755)
+	os.WriteFile(old, []byte("{}"), 0o644)
+	c := newConfig()
+	if _, err := os.Stat(c.path); err == nil {
+		t.Error("newConfig migrated the old settings")
+	}
+	c.migrateConfig()
+	if _, err := os.Stat(c.path); err != nil {
+		t.Errorf("migrateConfig did not copy: %v", err)
+	}
+}

@@ -92,11 +92,18 @@ var cfg = newConfig()
 
 func newConfig() *config {
 	home, _ := os.UserHomeDir()
-	path := filepath.Join(home, ".gopr", "gopr.jsonc")
-	migrateFile(path, filepath.Join(home, ".godiff", "godiff.jsonc"))
-	c := &config{path: path, settings: defaultSettings()}
+	c := &config{path: filepath.Join(home, ".gopr", "gopr.jsonc"), settings: defaultSettings()}
 	c.load()
 	return c
+}
+
+// migrateConfig copies the Godiff settings file to the GoPR one, once, and
+// loads it. It runs from main, not at package init, so tests never touch
+// the real home directory.
+func (c *config) migrateConfig() {
+	home, _ := os.UserHomeDir()
+	migrateFile(c.path, filepath.Join(home, ".godiff", "godiff.jsonc"))
+	c.load()
 }
 
 func (c *config) Get() Settings {

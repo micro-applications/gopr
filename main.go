@@ -247,6 +247,7 @@ func main() {
 	mygo.App.OnOpenFile(func(path string) {
 		go open(request{dir: path}, true)
 	})
+	cfg.migrateConfig()
 	state.open() // before the menu, which lists the recent repositories
 	applyTheme(cfg.Get())
 	mygo.App.SetMenu(buildMenu())
