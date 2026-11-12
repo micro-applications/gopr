@@ -250,7 +250,8 @@ func openApp() *window {
 		go w.checkChanges()
 		w.win.Update(w.refreshInboxIfStale)
 	})
-	w.loadInbox()
+	// openApp runs off the main thread, which alone touches the inbox.
+	w.win.Update(w.loadInbox)
 	w.captureIfAsked()
 	return w
 }
