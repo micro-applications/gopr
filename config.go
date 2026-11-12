@@ -324,6 +324,13 @@ type storeData struct {
 	Clones map[string]string `json:"clones"`
 	// LastRepository is the repository opened last, as kept before Recent.
 	LastRepository string `json:"lastRepository,omitempty"`
+	// InboxDays is the period of the inbox, in days: 7 or 30.
+	InboxDays int `json:"inboxDays,omitempty"`
+	// InboxHidden are the organizations, and the viewer's login, unchecked
+	// in the inbox's menu.
+	InboxHidden []string `json:"inboxHidden,omitempty"`
+	// InboxCollapsed are the sections of the inbox collapsed: mine, review.
+	InboxCollapsed []string `json:"inboxCollapsed,omitempty"`
 }
 
 // maxRecent is how many repositories the store remembers.
@@ -444,6 +451,56 @@ func (s *store) addRecent(root string) bool {
 	s.mu.Unlock()
 	s.save()
 	return true
+}
+
+// inboxDays is the period of the inbox: 7 days unless 30 were chosen.
+func (s *store) inboxDays() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.data.InboxDays == 30 {
+		return 30
+	}
+	return 7
+}
+
+func (s *store) setInboxDays(days int) {
+	s.mu.Lock()
+	s.data.InboxDays = days
+	s.mu.Unlock()
+	s.save()
+}
+
+// inboxHidden returns the owners unchecked in the inbox's menu.
+func (s *store) inboxHidden() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.data.InboxHidden)
+}
+
+func (s *store) setInboxHidden(hidden []string) {
+	s.mu.Lock()
+	s.data.InboxHidden = slices.Clone(hidden)
+	s.mu.Unlock()
+	s.save()
+}
+
+// inboxCollapsed reports whether a section of the inbox, mine or review, is
+// collapsed.
+func (s *store) inboxCollapsed(section string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Contains(s.data.InboxCollapsed, section)
+}
+
+func (s *store) setInboxCollapsed(section string, collapsed bool) {
+	s.mu.Lock()
+	list := slices.DeleteFunc(slices.Clone(s.data.InboxCollapsed), func(k string) bool { return k == section })
+	if collapsed {
+		list = append(list, section)
+	}
+	s.data.InboxCollapsed = list
+	s.mu.Unlock()
+	s.save()
 }
 
 func (s *store) save() {

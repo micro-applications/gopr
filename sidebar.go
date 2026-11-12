@@ -271,7 +271,7 @@ func (w *window) sidebar(c *ui.Context) {
 				ui.Spacer(c)
 			}
 		})
-		ui.Column(c).Grow(1)
+		w.inboxView(c)
 	})
 }
 

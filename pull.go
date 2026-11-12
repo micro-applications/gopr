@@ -419,6 +419,14 @@ func githubToken() string {
 	return token.value
 }
 
+// forgetGitHubToken makes the next githubToken look for the token again, as
+// after the user signs in.
+func forgetGitHubToken() {
+	token.Lock()
+	token.value, token.at = "", time.Time{}
+	token.Unlock()
+}
+
 // githubTokenKnown is the token as last found, without looking for it.
 func githubTokenKnown() string {
 	if t := strings.TrimSpace(cfg.Get().GithubToken); t != "" {

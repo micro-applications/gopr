@@ -82,7 +82,7 @@ func (w *window) commands() []command {
 		{title: "Decrease Code Font Size", keys: "⌘-", run: func() { changeFontSize(-1) }},
 		{title: "Reset Code Font Size", keys: "⌘0", run: func() { changeFontSize(0) }},
 		{title: "Open Config File", run: openConfig},
-		{title: "Refresh Changes", keys: "⌘R", run: w.refresh},
+		{title: "Refresh", keys: "⌘R", run: w.refreshAll},
 		{title: "Keyboard Shortcuts", keys: "⇧?", run: func() { w.help = true }},
 	}
 }
@@ -321,7 +321,7 @@ func (w *window) shortcutsHelp(c *ui.Context) {
 	}{
 		{"Navigation", [][2]string{{"Command bar", "⌘K"}, {"Filter files", "⌘P"}, {"Next hunk", "J"}, {"Previous hunk", "K"},
 			{"Next AI note", "N"}, {"Previous AI note", "⇧N"},
-			{"Toggle sidebar", "⌘⇧B"}, {"Toggle files", "⌘⇧E"}, {"Toggle word wrap", "⌥Z"}, {"Open file in editor", "⌘⇧O"}, {"Refresh changes", "⌘R"}}},
+			{"Toggle sidebar", "⌘⇧B"}, {"Toggle files", "⌘⇧E"}, {"Toggle word wrap", "⌥Z"}, {"Open file in editor", "⌘⇧O"}, {"Refresh", "⌘R"}}},
 		{"Search", [][2]string{{"Find in diffs", "⌘F"}, {"Next match", "↩"}, {"Previous match", "⇧↩"}, {"Close search", "Esc"}}},
 		{"Comments", [][2]string{{"Comment on a line", "Click"}, {"Comment on the hunk", "↩"}, {"Add comment", "⌘↩"}, {"Discard comment", "Esc"}}},
 		{"Pull requests", [][2]string{{"Open pull request", "⌘O"}, {"Review with AI", "⌘⇧I"}, {"Add to your review", "⌘↩"}, {"Reply", "⌘↩"}}},

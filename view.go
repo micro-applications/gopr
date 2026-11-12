@@ -230,6 +230,13 @@ func (w *window) mainArea(c *ui.Context, pal *palette) bool {
 	case w.opening != nil:
 		thinking(c, w.loadStatus)
 		return false
+	case w.repo == nil && w.inbox.signedOut:
+		emptyPanel(c, pal, "Sign in to GitHub", "Run gh auth login in a terminal, or set githubToken in the config file or $GH_TOKEN, to see your pull requests.", func() {
+			if ui.Button(c, "Try Again").Clicked() {
+				w.loadInbox()
+			}
+		})
+		return false
 	case w.repo == nil:
 		emptyPanel(c, pal, "Choose a pull request", "Your pull requests and the ones waiting on your review are in the sidebar.", nil)
 		return false

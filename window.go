@@ -170,6 +170,9 @@ type window struct {
 	// not be.
 	opening *opening
 	openErr error
+
+	// The sidebar's pull requests.
+	inbox inboxState
 }
 
 var (
@@ -242,10 +245,14 @@ func openWindow(dir string, src source) error {
 		}
 		windowsMu.Unlock()
 	})
-	w.win.OnFocus(func() { go w.checkChanges() })
+	w.win.OnFocus(func() {
+		go w.checkChanges()
+		w.win.Update(w.refreshInboxIfStale)
+	})
 	go state.addRecent(repo.Root)
 	w.load()
 	w.loadUser()
+	w.loadInbox()
 	w.captureIfAsked()
 	return nil
 }

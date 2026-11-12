@@ -116,7 +116,7 @@ func buildMenu() *mygo.Menu {
 				{ID: "theme-dark", Label: "Dark", Type: mygo.MenuItemRadio, Checked: s.Theme == "dark", Click: setTheme("dark")},
 			}},
 			mygo.Separator(),
-			{Label: "Refresh Changes", Accelerator: "CmdOrCtrl+R", Click: inWindow(func(w *window) { w.refresh() })},
+			{Label: "Refresh", Accelerator: "CmdOrCtrl+R", Click: inWindow(func(w *window) { w.refreshAll() })},
 			mygo.Separator(),
 			{Role: mygo.RoleToggleFullScreen},
 		}},

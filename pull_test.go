@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -64,6 +65,37 @@ type fakeGitHub struct {
 	// others are more pull requests, by their path in the API, as
 	// /repos/acme/web/pulls/1.
 	others map[string]fakePull
+	// The inbox: the viewer's organizations, the pull requests of its
+	// sections, and the number of matches of mine when more than it lists.
+	orgs         []string
+	mine, review []fakeInboxPull
+	mineTotal    int
+	// queries are the GraphQL requests: the query of a search, else
+	// "viewer".
+	queries []string
+	// status, when not 0, answers every request.
+	status int
+}
+
+// fakeInboxPull is a pull request of an inbox search.
+type fakeInboxPull struct {
+	repo   string
+	number int
+	title  string
+}
+
+// searchJSON is the answer of a search for pulls, with total matches, or
+// as many as pulls when 0.
+func searchJSON(pulls []fakeInboxPull, total int) string {
+	if total == 0 {
+		total = len(pulls)
+	}
+	var nodes []string
+	for _, p := range pulls {
+		nodes = append(nodes, fmt.Sprintf(`{"number":%d,"title":%q,"url":"https://github.com/%s/pull/%d","createdAt":%q,"updatedAt":%q,"author":{"login":"bo"},"repository":{"nameWithOwner":%q}}`,
+			p.number, p.title, p.repo, p.number, time.Now().Format(time.RFC3339), time.Now().Format(time.RFC3339), p.repo))
+	}
+	return fmt.Sprintf(`{"data":{"search":{"issueCount":%d,"nodes":[%s]}}}`, total, strings.Join(nodes, ","))
 }
 
 // fakePull is a pull request fakeGitHub answers for, without threads.
@@ -76,6 +108,38 @@ func (f *fakeGitHub) serve(t *testing.T) {
 		body, _ := io.ReadAll(r.Body)
 		f.mu.Lock()
 		defer f.mu.Unlock()
+		if f.status != 0 {
+			w.WriteHeader(f.status)
+			fmt.Fprint(w, `{"message":"Bad credentials"}`)
+			return
+		}
+		if r.URL.Path == "/graphql" {
+			var req struct {
+				Query     string `json:"query"`
+				Variables struct {
+					Query string `json:"query"`
+				} `json:"variables"`
+			}
+			json.Unmarshal(body, &req)
+			switch q := req.Variables.Query; {
+			case strings.Contains(q, "author:@me"):
+				f.queries = append(f.queries, q)
+				fmt.Fprint(w, searchJSON(f.mine, f.mineTotal))
+				return
+			case strings.Contains(q, "review-requested:@me"):
+				f.queries = append(f.queries, q)
+				fmt.Fprint(w, searchJSON(f.review, 0))
+				return
+			case strings.Contains(req.Query, "viewer"):
+				f.queries = append(f.queries, "viewer")
+				var orgs []string
+				for _, o := range f.orgs {
+					orgs = append(orgs, fmt.Sprintf(`{"login":%q}`, o))
+				}
+				fmt.Fprintf(w, `{"data":{"viewer":{"login":"ada","organizations":{"nodes":[%s]}}}}`, strings.Join(orgs, ","))
+				return
+			}
+		}
 		if r.Method != http.MethodGet && (r.URL.Path != "/graphql" || strings.Contains(string(body), "mutation")) {
 			f.writes = append(f.writes, r.Method+" "+r.URL.Path+" "+string(body))
 			fmt.Fprint(w, `{}`)
@@ -114,6 +178,26 @@ func (f *fakeGitHub) serve(t *testing.T) {
 	old := github.API
 	github.API = s.URL
 	t.Cleanup(func() { github.API = old })
+}
+
+// requests returns the GraphQL requests made, as queries records them.
+func (f *fakeGitHub) requests() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.queries)
+}
+
+// searches returns the queries of the searches made.
+func (f *fakeGitHub) searches() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []string
+	for _, q := range f.queries {
+		if q != "viewer" {
+			out = append(out, q)
+		}
+	}
+	return out
 }
 
 func (f *fakeGitHub) takeWrites() []string {
