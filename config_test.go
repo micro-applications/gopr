@@ -1,10 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
+	"sync"
 	"testing"
 
 	"github.com/egoist/godiff/internal/github"
@@ -80,5 +82,38 @@ func TestNewConfigDoesNotMigrate(t *testing.T) {
 	c.migrateConfig()
 	if _, err := os.Stat(c.path); err != nil {
 		t.Errorf("migrateConfig did not copy: %v", err)
+	}
+}
+
+func TestStoreSaveReplacesFile(t *testing.T) {
+	dir := t.TempDir()
+	s := &store{path: filepath.Join(dir, "state.json")}
+	os.WriteFile(s.path, []byte("{}"), 0o644)
+	// A link to the file keeps what it held: the save writes a new file in
+	// its place rather than into it, which a reader could see half written.
+	link := filepath.Join(dir, "link")
+	if err := os.Link(s.path, link); err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	for i := range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s.addRecent(fmt.Sprintf("/repo%d", i))
+		}()
+	}
+	wg.Wait()
+	if got, _ := os.ReadFile(link); string(got) != "{}" {
+		t.Errorf("the save wrote into the file: %q", got)
+	}
+	var saved storeData
+	data, _ := os.ReadFile(s.path)
+	if err := json.Unmarshal(data, &saved); err != nil || len(saved.Recent) != 8 {
+		t.Errorf("saved %q: %v", data, err)
+	}
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 2 {
+		t.Errorf("files left: %v", entries)
 	}
 }

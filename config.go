@@ -305,6 +305,9 @@ type store struct {
 	mu   sync.Mutex
 	path string
 	data storeData
+	// saveMu keeps saves in order: the last snapshot taken is the last
+	// written.
+	saveMu sync.Mutex
 }
 
 type storeData struct {
@@ -503,14 +506,41 @@ func (s *store) setInboxCollapsed(section string, collapsed bool) {
 	s.save()
 }
 
+// save writes the store, whole: to a file beside it, then in its place,
+// so that a save cut short, or another made at once, leaves no half of it.
 func (s *store) save() {
 	if s.path == "" {
 		return
 	}
+	s.saveMu.Lock()
+	defer s.saveMu.Unlock()
 	s.mu.Lock()
 	data, err := json.Marshal(s.data)
 	s.mu.Unlock()
 	if err == nil {
-		os.WriteFile(s.path, data, 0o644)
+		writeFileAtomic(s.path, data)
 	}
+}
+
+// writeFileAtomic writes a file through a temporary one in its directory,
+// renamed over it.
+func writeFileAtomic(path string, data []byte) error {
+	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(data)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Chmod(f.Name(), 0o644)
+	}
+	if err == nil {
+		err = os.Rename(f.Name(), path)
+	}
+	if err != nil {
+		os.Remove(f.Name())
+	}
+	return err
 }
