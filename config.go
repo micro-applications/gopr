@@ -15,7 +15,7 @@ import (
 	"github.com/egoist/mygo"
 )
 
-// Settings are the user's preferences, in ~/.godiff/godiff.jsonc as
+// Settings are the user's preferences, in ~/.gopr/gopr.jsonc as
 // codiff keeps its own in ~/.codiff/codiff.jsonc.
 type Settings struct {
 	CodeFontFamily      string `json:"codeFontFamily"`
@@ -92,7 +92,9 @@ var cfg = newConfig()
 
 func newConfig() *config {
 	home, _ := os.UserHomeDir()
-	c := &config{path: filepath.Join(home, ".godiff", "godiff.jsonc"), settings: defaultSettings()}
+	path := filepath.Join(home, ".gopr", "gopr.jsonc")
+	migrateFile(path, filepath.Join(home, ".godiff", "godiff.jsonc"))
+	c := &config{path: path, settings: defaultSettings()}
 	c.load()
 	return c
 }
@@ -163,7 +165,7 @@ func (c *config) load() bool {
 		Settings json.RawMessage `json:"settings"`
 	}
 	if err := json.Unmarshal(stripJSONC(data), &file); err != nil {
-		log.Printf("godiff: %s: %v", c.path, err)
+		log.Printf("gopr: %s: %v", c.path, err)
 		return false
 	}
 	s := defaultSettings()
@@ -190,7 +192,7 @@ func (c *config) write(s Settings) {
 		return
 	}
 	if err := os.WriteFile(c.path, append(data, '\n'), 0o644); err != nil {
-		log.Printf("godiff: %v", err)
+		log.Printf("gopr: %v", err)
 		return
 	}
 	if fi, err := os.Stat(c.path); err == nil {
@@ -301,6 +303,7 @@ func (s *store) open() {
 		return
 	}
 	s.path = filepath.Join(dir, "state.json")
+	migrateFile(s.path, filepath.Join(filepath.Dir(dir), "Godiff", "state.json"))
 	if data, err := os.ReadFile(s.path); err == nil {
 		json.Unmarshal(data, &s.data)
 	}

@@ -313,7 +313,7 @@ func newWindow(repo *git.Repo, src source) *window {
 	return w
 }
 
-// windowTitle is "<repository>[/<source>] · Godiff".
+// windowTitle is "<repository>[/<source>] · GoPR".
 func windowTitle(root string, src source) string {
 	name := filepath.Base(root)
 	switch src.kind {
@@ -325,7 +325,7 @@ func windowTitle(root string, src source) string {
 		_, n := src.pull()
 		name += fmt.Sprintf("/#%d", n)
 	}
-	return name + " · Godiff"
+	return name + " · GoPR"
 }
 
 func shortHash(h string) string {

@@ -427,7 +427,7 @@ func (v *welcome) view(c *ui.Context) {
 		title, detail = "Unable to read repository", errorText(v.err)
 	} else if v.err != nil {
 		title = "No Git repository found"
-		detail = "Godiff was opened outside a Git repository. Run godiff from inside a repository, or choose File → Open Folder… to open one."
+		detail = "GoPR was opened outside a Git repository. Run godiff from inside a repository, or choose File → Open Folder… to open one."
 	}
 	emptyPanel(c, pal, title, detail, func() {
 		if ui.PrimaryButton(c, "Open Folder…").Clicked() {

@@ -174,7 +174,7 @@ func showWelcome(err error) {
 	}
 	v := &welcome{err: err}
 	welcomeWin = mygo.NewWindow(mygo.WindowOptions{
-		Title:         "Godiff",
+		Title:         "GoPR",
 		Width:         640,
 		Height:        420,
 		MinWidth:      480,
@@ -216,14 +216,14 @@ func main() {
 		return
 	}
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "godiff:", err)
+		fmt.Fprintln(os.Stderr, "gopr:", err)
 		os.Exit(2)
 	}
 	// The command line names a repository, unless the app was started from
 	// Finder or the Dock, in /, or by `mygo dev`, in its project.
 	fromUser := len(args) > 0 || dir != wd || (wd != "/" && wd != "" && os.Getenv("MYGO_ENV") != "development")
 
-	name := "Godiff"
+	name := "GoPR"
 	if n := os.Getenv("GODIFF_NAME"); n != "" {
 		// Another name runs apart from the installed app, for testing.
 		name = n
@@ -239,7 +239,7 @@ func main() {
 		args, workingDir = takeCwd(args, workingDir)
 		req, err := parseArgs(args, workingDir)
 		if err != nil {
-			go mygo.Dialog.Error("Godiff", err.Error())
+			go mygo.Dialog.Error("GoPR", err.Error())
 			return
 		}
 		go open(req, true)
