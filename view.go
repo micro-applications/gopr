@@ -23,6 +23,8 @@ func (w *window) view(c *ui.Context) {
 			}
 		}()
 	}
+	// Everything shows as large as the zoom says, text and room alike.
+	c.SetZoom(float32(w.settings.Zoom))
 	t := c.Theme()
 	pal := paletteFor(t)
 	w.now = c.Now()

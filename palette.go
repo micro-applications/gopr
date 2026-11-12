@@ -78,9 +78,9 @@ func (w *window) commands() []command {
 		{title: "Toggle Whitespace", hint: whitespace, run: func() {
 			cfg.Update(func(s *Settings) { s.ShowWhitespace = !s.ShowWhitespace })
 		}},
-		{title: "Increase Code Font Size", keys: "⌘+", run: func() { changeFontSize(1) }},
-		{title: "Decrease Code Font Size", keys: "⌘-", run: func() { changeFontSize(-1) }},
-		{title: "Reset Code Font Size", keys: "⌘0", run: func() { changeFontSize(0) }},
+		{title: "Zoom In", keys: "⌘+", run: func() { changeZoom(1) }},
+		{title: "Zoom Out", keys: "⌘-", run: func() { changeZoom(-1) }},
+		{title: "Actual Size", keys: "⌘0", run: func() { changeZoom(0) }},
 		{title: "Markdown Width: Narrow", run: func() { setMarkdownWidth("narrow") }},
 		{title: "Markdown Width: Medium", run: func() { setMarkdownWidth("medium") }},
 		{title: "Markdown Width: Wide", run: func() { setMarkdownWidth("wide") }},
@@ -106,15 +106,34 @@ func toggleLayout() {
 
 func toggleWrap() { cfg.Update(func(s *Settings) { s.WordWrap = !s.WordWrap }) }
 
-// changeFontSize makes the code larger or smaller, or resets it with 0.
-func changeFontSize(delta int) {
-	cfg.Update(func(s *Settings) {
-		if delta == 0 {
-			s.CodeFontSize = defaultSettings().CodeFontSize
-		} else {
-			s.CodeFontSize += delta
+// zoomLevels are the zooms ⌘+ and ⌘- step through, as a browser's.
+var zoomLevels = []float64{0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3}
+
+// nextZoom is the zoom a step in (1) or out (-1) from z, 1 for 0.
+func nextZoom(z float64, step int) float64 {
+	switch {
+	case step > 0:
+		for _, l := range zoomLevels {
+			if l > z+1e-6 {
+				return l
+			}
 		}
-	})
+		return zoomLevels[len(zoomLevels)-1]
+	case step < 0:
+		for i := len(zoomLevels) - 1; i >= 0; i-- {
+			if zoomLevels[i] < z-1e-6 {
+				return zoomLevels[i]
+			}
+		}
+		return zoomLevels[0]
+	}
+	return 1
+}
+
+// changeZoom shows everything larger (1), smaller (-1), or at its size
+// (0).
+func changeZoom(step int) {
+	cfg.Update(func(s *Settings) { s.Zoom = nextZoom(s.Zoom, step) })
 }
 
 func openConfig() {
@@ -332,7 +351,7 @@ func (w *window) shortcutsHelp(c *ui.Context) {
 		{"Search", [][2]string{{"Find in diffs", "⌘F"}, {"Next match", "↩"}, {"Previous match", "⇧↩"}, {"Close search", "Esc"}}},
 		{"Comments", [][2]string{{"Comment on a line", "Click"}, {"Comment on the hunk", "↩"}, {"Add comment", "⌘↩"}, {"Discard comment", "Esc"}}},
 		{"Pull requests", [][2]string{{"Open pull request", "⌘O"}, {"Review with AI", "⌘⇧I"}, {"Add to your review", "⌘↩"}, {"Reply", "⌘↩"}}},
-		{"Code", [][2]string{{"Bigger text", "⌘+"}, {"Smaller text", "⌘-"}, {"Actual size", "⌘0"}}},
+		{"Window", [][2]string{{"Zoom in", "⌘+"}, {"Zoom out", "⌘-"}, {"Actual size", "⌘0"}}},
 	}
 	ui.Modal(c, &w.help, func() {
 		ui.Column(c).Width(620).Gap(16).Children(func() {

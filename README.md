@@ -94,7 +94,7 @@ from its name or URL.
 | <kbd>⌘⇧I</kbd> | Review with AI |
 | <kbd>⌥Z</kbd> | Toggle word wrap |
 | <kbd>⌘⇧O</kbd> | Open the file in your editor |
-| <kbd>⌘+</kbd> / <kbd>⌘-</kbd> / <kbd>⌘0</kbd> | Code font size |
+| <kbd>⌘+</kbd> / <kbd>⌘-</kbd> / <kbd>⌘0</kbd> | Zoom the window: text, code, previews and room alike |
 | <kbd>⇧?</kbd> | All the shortcuts |
 
 ## Configuration
@@ -120,7 +120,8 @@ with codiff's names, and apply to open windows as the file changes:
     "sidebarPosition": "left",     // or "right"
     "showWhitespace": false,
     "theme": "system",             // or "light", "dark"
-    "wordWrap": false
+    "wordWrap": false,
+    "zoom": 1                      // how large everything shows: ⌘+ and ⌘- step it, 0.5 to 3
   }
 }
 ```

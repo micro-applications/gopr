@@ -101,10 +101,10 @@ func buildMenu() *mygo.Menu {
 				{Label: "Expand All Files", Click: inWindow(func(w *window) { w.setAllCollapsed(false) })},
 			}},
 			{Label: "Markdown Preview", Submenu: markdownWidthItems(s)},
-			{Label: "Font Size", Submenu: []*mygo.MenuItem{
-				{Label: "Bigger", Accelerator: "CmdOrCtrl+=", Click: func(*mygo.MenuItem, *mygo.Window) { changeFontSize(1) }},
-				{Label: "Smaller", Accelerator: "CmdOrCtrl+-", Click: func(*mygo.MenuItem, *mygo.Window) { changeFontSize(-1) }},
-				{Label: "Actual Size", Accelerator: "CmdOrCtrl+0", Click: func(*mygo.MenuItem, *mygo.Window) { changeFontSize(0) }},
+			{Label: "Zoom", Submenu: []*mygo.MenuItem{
+				{Label: "Zoom In", Accelerator: "CmdOrCtrl+=", Click: func(*mygo.MenuItem, *mygo.Window) { changeZoom(1) }},
+				{Label: "Zoom Out", Accelerator: "CmdOrCtrl+-", Click: func(*mygo.MenuItem, *mygo.Window) { changeZoom(-1) }},
+				{Label: "Actual Size", Accelerator: "CmdOrCtrl+0", Click: func(*mygo.MenuItem, *mygo.Window) { changeZoom(0) }},
 			}},
 			{Label: "Comments", Submenu: []*mygo.MenuItem{
 				{ID: "copyOnClose", Label: "Copy Comments on Close", Type: mygo.MenuItemCheckbox, Checked: s.CopyCommentsOnClose, Click: func(*mygo.MenuItem, *mygo.Window) {

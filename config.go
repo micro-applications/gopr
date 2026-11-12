@@ -46,6 +46,9 @@ type Settings struct {
 	ShowWhitespace       bool   `json:"showWhitespace"`
 	Theme                string `json:"theme"` // system, light or dark
 	WordWrap             bool   `json:"wordWrap"`
+	// Zoom is how large the window shows everything, 1 for 100%: ⌘+ and
+	// ⌘- step it.
+	Zoom float64 `json:"zoom"`
 }
 
 func defaultSettings() Settings {
@@ -58,6 +61,7 @@ func defaultSettings() Settings {
 		ReviewCommentsPrefix: "# Address these Review Comments",
 		SidebarPosition:      "left",
 		Theme:                "system",
+		Zoom:                 1,
 	}
 }
 
@@ -80,6 +84,10 @@ func (s *Settings) normalize() {
 		s.MarkdownFontSize = d.MarkdownFontSize
 	}
 	s.MarkdownFontSize = min(max(s.MarkdownFontSize, minMarkdownFontSize), maxMarkdownFontSize)
+	if s.Zoom == 0 {
+		s.Zoom = d.Zoom
+	}
+	s.Zoom = min(max(s.Zoom, zoomLevels[0]), zoomLevels[len(zoomLevels)-1])
 	if markdownWidthOf(s.MarkdownWidth) == nil {
 		s.MarkdownWidth = d.MarkdownWidth
 	}
