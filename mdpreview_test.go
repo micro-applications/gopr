@@ -247,3 +247,24 @@ func TestMarkdownDeletedShowsDiff(t *testing.T) {
 		t.Errorf("the removed lines do not show: %q", tt.Texts())
 	}
 }
+
+func TestMarkdownNoteShowsDiff(t *testing.T) {
+	w, tt := openedReadmePull(t, `[]`)
+	note := &aiNote{path: "README.md", side: sideNew, line: 3, text: "Bolder?"}
+	w.notes = map[string][]*aiNote{"README.md": {note}}
+	w.rowsDirty = true
+	tt.Frame()
+	tt.Key(0, ui.KeyN)
+	tt.Frame()
+	if w.noteSel != note || !w.mdDiff["README.md"] {
+		t.Fatalf("note %+v, Diff chosen %v", w.noteSel, w.mdDiff["README.md"])
+	}
+	first, last := w.list.Visible()
+	shown := false
+	for r := first; r <= last && r < len(w.rows); r++ {
+		shown = shown || w.rows[r].kind == rowAINote && w.rows[r].note == note
+	}
+	if !shown || !tt.HasText("Bolder?") {
+		t.Errorf("the note does not show: %q", tt.Texts())
+	}
+}
