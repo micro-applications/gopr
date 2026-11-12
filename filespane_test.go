@@ -139,3 +139,14 @@ func TestFilesPaneResizeSaved(t *testing.T) {
 		t.Errorf("saved width %v, want %v", width, w.filesWidth)
 	}
 }
+
+func TestFilterClearedForAnotherPull(t *testing.T) {
+	w, tt := openedReadmePull(t, `[]`)
+	w.filter = "nothing matches this"
+	tt.Frame()
+	w.openPull(acmeApp, 2)
+	tt.Frame()
+	if w.filter != "" {
+		t.Errorf("filter %q kept for another pull request", w.filter)
+	}
+}

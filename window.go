@@ -432,6 +432,8 @@ func (w *window) switchTo(src source) {
 	w.list = ui.ListState{Key: w.list.Key, Header: w.list.Header}
 	w.selFile, w.selHunk = -1, -1
 	w.finding, w.query = false, ""
+	// The filter, of the other source's files, would hide the new ones.
+	w.filter = ""
 	w.fileTabs, w.activeTab = nil, 0
 	w.mdDiff, w.mdSource, w.mdOpts = nil, nil, nil
 	w.hscroll = map[string]float32{}
