@@ -1,13 +1,13 @@
 module github.com/egoist/godiff
 
-go 1.27.1
+go 1.27.3
 
 tool github.com/egoist/mygo/cmd/mygo
 
 require (
 	github.com/Broderick-Westrope/pele-go v0.2.0
 	github.com/alecthomas/chroma/v2 v2.27.0
-	github.com/egoist/mygo v0.4.9-0.20261014215200-a17c244ec2b7
+	github.com/egoist/mygo v0.9.0
 )
 
 require (
@@ -15,5 +15,6 @@ require (
 	github.com/ebitengine/purego v0.11.1 // indirect
 	github.com/go-text/typesetting v0.3.5 // indirect
 	golang.org/x/image v0.46.0 // indirect
+	golang.org/x/net v0.59.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 )
