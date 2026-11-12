@@ -7,9 +7,11 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestParseRemote(t *testing.T) {
@@ -222,5 +224,57 @@ func TestClient(t *testing.T) {
 	_, err = c.Pull(ctx, repo, 404)
 	if err == nil || !strings.Contains(err.Error(), "Not found") {
 		t.Errorf("missing pull: %v", err)
+	}
+}
+
+func TestInboxQuery(t *testing.T) {
+	since := time.Date(2026, 11, 5, 0, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		name  string
+		s     Section
+		scope Scope
+		want  string
+	}{
+		{"mine, everywhere", Mine, Scope{All: true}, "is:pr is:open author:@me created:>=2026-11-05 sort:created-desc"},
+		{"review, everywhere", Review, Scope{All: true}, "is:pr is:open draft:false review-requested:@me created:>=2026-11-05 sort:created-desc"},
+		{"mine, orgs and user", Mine, Scope{Orgs: []string{"zeta", "acme"}, User: "ada"}, "is:pr is:open author:@me org:acme org:zeta user:ada created:>=2026-11-05 sort:created-desc"},
+		{"nothing selected", Review, Scope{}, ""},
+	} {
+		if got := InboxQuery(tc.s, tc.scope, since); got != tc.want {
+			t.Errorf("%s: got %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestSearchPulls(t *testing.T) {
+	var body string
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		body = string(b)
+		fmt.Fprint(w, `{"data":{"search":{"issueCount":150,"nodes":[{"number":4,"title":"Add limiter","isDraft":false,"createdAt":"2026-11-10T00:00:00Z","author":{"login":"bo"},"repository":{"nameWithOwner":"acme/api"}},{}]}}}`)
+	}))
+	t.Cleanup(s.Close)
+	withAPI(t, s.URL)
+	pulls, total, err := (&Client{Token: "t"}).SearchPulls(context.Background(), "is:pr")
+	if err != nil || total != 150 || len(pulls) != 1 {
+		t.Fatalf("search %+v %d %v", pulls, total, err)
+	}
+	if pulls[0].Repo != (Repo{"acme", "api"}) || pulls[0].Number != 4 || pulls[0].Author.Login != "bo" {
+		t.Fatalf("pull %+v", pulls[0])
+	}
+	if !strings.Contains(body, "is:pr") {
+		t.Errorf("request %s", body)
+	}
+}
+
+func TestViewerOrgs(t *testing.T) {
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"data":{"viewer":{"login":"ada","organizations":{"nodes":[{"login":"zeta"},{"login":"Acme"}]}}}}`)
+	}))
+	t.Cleanup(s.Close)
+	withAPI(t, s.URL)
+	login, orgs, err := (&Client{Token: "t"}).ViewerOrgs(context.Background())
+	if err != nil || login != "ada" || !reflect.DeepEqual(orgs, []string{"Acme", "zeta"}) {
+		t.Fatalf("viewer %q %v %v", login, orgs, err)
 	}
 }

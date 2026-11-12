@@ -137,61 +137,101 @@ func (c *Client) openPullsREST(ctx context.Context, repo Repo) ([]Summary, error
 	return out, nil
 }
 
-const openPullsQuery = `
-query OpenPullRequests($query: String!) {
-  search(query: $query, type: ISSUE, first: 100) {
-    nodes {
-      ... on PullRequest {
+// pullFields are the fields of a pull request that searchNode decodes.
+const pullFields = `
         number title url isDraft createdAt updatedAt headRefName
         author { login avatarUrl }
         labels(first: 10) { nodes { name color } }
         comments { totalCount }
         reviewDecision
         commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
-        additions deletions changedFiles
+        additions deletions changedFiles`
+
+const openPullsQuery = `
+query OpenPullRequests($query: String!) {
+  search(query: $query, type: ISSUE, first: 100) {
+    nodes {
+      ... on PullRequest {` + pullFields + `
       }
     }
   }
 }`
 
+// searchNode is a pull request as a GraphQL search returns it.
+type searchNode struct {
+	Number      int       `json:"number"`
+	Title       string    `json:"title"`
+	URL         string    `json:"url"`
+	IsDraft     bool      `json:"isDraft"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+	HeadRefName string    `json:"headRefName"`
+	Author      *struct {
+		Login     string `json:"login"`
+		AvatarURL string `json:"avatarUrl"`
+	} `json:"author"`
+	Labels *struct {
+		Nodes []struct {
+			Name  string `json:"name"`
+			Color string `json:"color"`
+		} `json:"nodes"`
+	} `json:"labels"`
+	Comments struct {
+		TotalCount int `json:"totalCount"`
+	} `json:"comments"`
+	ReviewDecision string `json:"reviewDecision"`
+	Commits        struct {
+		Nodes []struct {
+			Commit struct {
+				StatusCheckRollup *struct {
+					State string `json:"state"`
+				} `json:"statusCheckRollup"`
+			} `json:"commit"`
+		} `json:"nodes"`
+	} `json:"commits"`
+	Additions    int `json:"additions"`
+	Deletions    int `json:"deletions"`
+	ChangedFiles int `json:"changedFiles"`
+}
+
+// summaryOf converts a search result to a Summary.
+func summaryOf(n searchNode) Summary {
+	s := Summary{Number: n.Number, Title: n.Title, URL: n.URL, Draft: n.IsDraft, HeadRef: n.HeadRefName,
+		CreatedAt: n.CreatedAt, UpdatedAt: n.UpdatedAt, Comments: n.Comments.TotalCount,
+		Additions: n.Additions, Deletions: n.Deletions, ChangedFiles: n.ChangedFiles}
+	if n.Author != nil {
+		s.Author = User{Login: n.Author.Login, AvatarURL: n.Author.AvatarURL}
+	}
+	if n.Labels != nil {
+		for _, l := range n.Labels.Nodes {
+			s.Labels = append(s.Labels, Label{Name: l.Name, Color: l.Color})
+		}
+	}
+	switch n.ReviewDecision {
+	case "APPROVED":
+		s.ReviewDecision = "approved"
+	case "CHANGES_REQUESTED":
+		s.ReviewDecision = "changes_requested"
+	case "REVIEW_REQUIRED":
+		s.ReviewDecision = "review_required"
+	}
+	if len(n.Commits.Nodes) > 0 && n.Commits.Nodes[0].Commit.StatusCheckRollup != nil {
+		switch n.Commits.Nodes[0].Commit.StatusCheckRollup.State {
+		case "SUCCESS":
+			s.Checks = "success"
+		case "FAILURE", "ERROR":
+			s.Checks = "failure"
+		case "PENDING", "EXPECTED":
+			s.Checks = "pending"
+		}
+	}
+	return s
+}
+
 func (c *Client) openPullsGraphQL(ctx context.Context, repo Repo) ([]Summary, error) {
 	var data struct {
 		Search struct {
-			Nodes []struct {
-				Number      int       `json:"number"`
-				Title       string    `json:"title"`
-				URL         string    `json:"url"`
-				IsDraft     bool      `json:"isDraft"`
-				CreatedAt   time.Time `json:"createdAt"`
-				UpdatedAt   time.Time `json:"updatedAt"`
-				HeadRefName string    `json:"headRefName"`
-				Author      *struct {
-					Login     string `json:"login"`
-					AvatarURL string `json:"avatarUrl"`
-				} `json:"author"`
-				Labels *struct {
-					Nodes []struct {
-						Name  string `json:"name"`
-						Color string `json:"color"`
-					} `json:"nodes"`
-				} `json:"labels"`
-				Comments struct {
-					TotalCount int `json:"totalCount"`
-				} `json:"comments"`
-				ReviewDecision string `json:"reviewDecision"`
-				Commits        struct {
-					Nodes []struct {
-						Commit struct {
-							StatusCheckRollup *struct {
-								State string `json:"state"`
-							} `json:"statusCheckRollup"`
-						} `json:"commit"`
-					} `json:"nodes"`
-				} `json:"commits"`
-				Additions    int `json:"additions"`
-				Deletions    int `json:"deletions"`
-				ChangedFiles int `json:"changedFiles"`
-			} `json:"nodes"`
+			Nodes []searchNode `json:"nodes"`
 		} `json:"search"`
 	}
 	q := fmt.Sprintf("repo:%s is:pr is:open sort:updated-desc", repo)
@@ -203,36 +243,7 @@ func (c *Client) openPullsGraphQL(ctx context.Context, repo Repo) ([]Summary, er
 		if n.Number == 0 {
 			continue // not a pull request
 		}
-		s := Summary{Number: n.Number, Title: n.Title, URL: n.URL, Draft: n.IsDraft, HeadRef: n.HeadRefName,
-			CreatedAt: n.CreatedAt, UpdatedAt: n.UpdatedAt, Comments: n.Comments.TotalCount,
-			Additions: n.Additions, Deletions: n.Deletions, ChangedFiles: n.ChangedFiles}
-		if n.Author != nil {
-			s.Author = User{Login: n.Author.Login, AvatarURL: n.Author.AvatarURL}
-		}
-		if n.Labels != nil {
-			for _, l := range n.Labels.Nodes {
-				s.Labels = append(s.Labels, Label{Name: l.Name, Color: l.Color})
-			}
-		}
-		switch n.ReviewDecision {
-		case "APPROVED":
-			s.ReviewDecision = "approved"
-		case "CHANGES_REQUESTED":
-			s.ReviewDecision = "changes_requested"
-		case "REVIEW_REQUIRED":
-			s.ReviewDecision = "review_required"
-		}
-		if len(n.Commits.Nodes) > 0 && n.Commits.Nodes[0].Commit.StatusCheckRollup != nil {
-			switch n.Commits.Nodes[0].Commit.StatusCheckRollup.State {
-			case "SUCCESS":
-				s.Checks = "success"
-			case "FAILURE", "ERROR":
-				s.Checks = "failure"
-			case "PENDING", "EXPECTED":
-				s.Checks = "pending"
-			}
-		}
-		out = append(out, s)
+		out = append(out, summaryOf(n))
 	}
 	return out, nil
 }
