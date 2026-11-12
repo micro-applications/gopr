@@ -104,21 +104,32 @@ func TestOpenPullBindsRepo(t *testing.T) {
 
 func TestOpenPullLastChoiceWins(t *testing.T) {
 	freshState(t)
-	clone, base, head := pullClone(t, acmeApp)
-	(&fakeGitHub{base: base, head: head, comments: `[]`}).serve(t)
-	fakeResolve(t, map[github.Repo]string{acmeApp: clone})
+	appClone, web, _, _ := twoRepos(t)
 	w, tt := emptyWindow(t)
 	w.hold = true
 	w.openPull(acmeApp, 1)
-	w.openPull(acmeApp, 2)
+	w.openPull(acmeWeb, 1)
 	tt.Frame()
-	if !tt.HasText("Finding acme/app…") {
+	if !tt.HasText("Finding acme/web…") {
 		t.Errorf("no status in %q", tt.Texts())
 	}
+	if len(w.held) != 2 {
+		t.Fatalf("%d held, want the two resolves", len(w.held))
+	}
+	// acme/web, chosen last, is found first: acme/app, found after, must
+	// not take its place.
+	resolveApp, resolveWeb := w.held[0], w.held[1]
+	w.held = nil
+	resolveWeb()
+	drain(w)
+	resolveApp()
 	drain(w)
 	tt.Frame()
-	if want := pullSource(acmeApp, 2); w.source != want {
+	if want := pullSource(acmeWeb, 1); w.source != want {
 		t.Fatalf("source %+v, want %+v", w.source, want)
+	}
+	if w.repo == nil || w.repo.Root != web || w.repo.Root == appClone {
+		t.Fatalf("repo %+v, want %s", w.repo, web)
 	}
 }
 
@@ -139,14 +150,17 @@ func webClone(t *testing.T) (server, clone, base, head string) {
 	return server, clone, base, head
 }
 
-func TestSwitchRepoDuringFetch(t *testing.T) {
-	freshState(t)
-	appServer, appClone, appBase, appHead := pullServer(t)
-	// acme/app's remote is upstream, which acme/web's clone lacks: a fetch
-	// of it there would fall back to acme/app's URL, and get its commits.
+// twoRepos makes clones of acme/app and acme/web, whose #1 differ, with
+// GitHub and resolveClone faked for both. acme/app's remote is upstream,
+// which acme/web's clone lacks: a fetch of it there would fall back to
+// acme/app's URL, and get its commits.
+func twoRepos(t *testing.T) (appClone, web, appHead, webHead string) {
+	t.Helper()
+	var appServer, webServer, appBase, webBase string
+	appServer, appClone, appBase, appHead = pullServer(t)
 	gitIn(t, appClone, "remote", "rename", "origin", "upstream")
 	gitIn(t, appClone, "remote", "set-url", "upstream", "https://github.com/acme/app.git")
-	webServer, web, webBase, webHead := webClone(t)
+	webServer, web, webBase, webHead = webClone(t)
 	appClone, web = realPath(t, appClone), realPath(t, web)
 	if appHead == webHead {
 		t.Fatal("the pull requests have the same head")
@@ -156,6 +170,12 @@ func TestSwitchRepoDuringFetch(t *testing.T) {
 		"/repos/acme/web/pulls/1": {title: "Add web", base: webBase, head: webHead},
 	}}).serve(t)
 	fakeResolve(t, map[github.Repo]string{acmeApp: appClone, acmeWeb: web})
+	return appClone, web, appHead, webHead
+}
+
+func TestSwitchRepoDuringFetch(t *testing.T) {
+	freshState(t)
+	appClone, web, appHead, _ := twoRepos(t)
 	w, tt := emptyWindow(t)
 	w.hold = true
 
