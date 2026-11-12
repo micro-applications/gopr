@@ -87,10 +87,12 @@ Layout:
   user said the current behavior need not be kept; this is the reading that
   matches "a single window with PRs in the sidebar." The code under
   `internal/` (git, diff, highlight, agent, github) stays.
-- **Command line:** `godiff`, with no argument, opens or focuses the window.
-  `godiff owner/repo#123` and `godiff https://github.com/owner/repo/pull/123`
-  open that PR's workspace (it need not be in the inbox). Other arguments
-  (commits, branches, paths) are dropped, with a message.
+- **Command line (user decision: the command is `gopr`).** Godiff →
+  Install Command Line Tool… installs `gopr` instead of `godiff`. `gopr`,
+  with no argument, opens or focuses the window. `gopr owner/repo#123` and
+  `gopr https://github.com/owner/repo/pull/123` open that PR's workspace (it
+  need not be in the inbox). Other arguments (commits, branches, paths) are
+  dropped, with a message. *My call:* the app itself keeps the name Godiff.
 - "My pull requests" = open PRs authored by the signed-in user. "Waiting on
   my review" = open, non-draft PRs where the user's review is requested,
   directly or through a team (`review-requested:@me`). PRs the user already
