@@ -26,6 +26,8 @@ func TestParseRemote(t *testing.T) {
 		{"ssh://git@github.com/egoist/godiff.git", "egoist/godiff"},
 		{"git@gitlab.com:egoist/godiff.git", ""},
 		{"/srv/repos/app.git", ""},
+		{"https://github.com/../x.git", ""},
+		{"git@github.com:acme/..git", ""},
 	} {
 		r, ok := ParseRemote(tc.url)
 		got := ""
@@ -55,7 +57,8 @@ func TestParsePull(t *testing.T) {
 			t.Errorf("%s: %v %d %v", tc.in, repo, n, ok)
 		}
 	}
-	for _, bad := range []string{"main", "HEAD~1", "12", "#0", "https://github.com/a/b/issues/1"} {
+	for _, bad := range []string{"main", "HEAD~1", "12", "#0", "https://github.com/a/b/issues/1",
+		"../x#1", "acme/..#1", "./x#1", "https://github.com/../x/pull/1", "github.com/acme/./pull/1"} {
 		if _, _, ok := ParsePull(bad); ok {
 			t.Errorf("%s parsed", bad)
 		}
