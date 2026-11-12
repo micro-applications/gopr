@@ -412,6 +412,30 @@ func TestParseArgs(t *testing.T) {
 	}
 }
 
+func TestLaunchDropsOtherArgs(t *testing.T) {
+	var opened []request
+	var said []string
+	oldOpen, oldComplain := openWindow, complain
+	openWindow = func(req request) { opened = append(opened, req) }
+	complain = func(msg string) { said = append(said, msg) }
+	t.Cleanup(func() { openWindow, complain = oldOpen, oldComplain })
+
+	// Arguments it does not take open the window, which says why.
+	launch([]string{"HEAD~1"})
+	if len(opened) != 1 || opened[0] != (request{}) {
+		t.Errorf("opened %+v, want the window alone", opened)
+	}
+	if len(said) != 1 || !strings.Contains(said[0], "owner/repo#123") {
+		t.Errorf("said %q", said)
+	}
+
+	opened, said = nil, nil
+	launch([]string{"acme/api#4"})
+	if want := (request{github.Repo{Owner: "acme", Name: "api"}, 4}); len(opened) != 1 || opened[0] != want || len(said) != 0 {
+		t.Errorf("opened %+v, said %q", opened, said)
+	}
+}
+
 func TestCLIName(t *testing.T) {
 	if cliName != "gopr" {
 		t.Errorf("cliName %q", cliName)

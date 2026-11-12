@@ -64,15 +64,32 @@ func open(req request) {
 	}
 }
 
+// launch opens what a command line asks, the first one's or one passed on
+// to the running GoPR. Arguments it does not take are dropped, and the
+// window, brought to the front, says why: it is opened with open -n -a,
+// whose output nobody sees.
+func launch(args []string) {
+	req, err := parseArgs(args)
+	if err != nil {
+		req = request{}
+	}
+	openWindow(req)
+	if err != nil && err != errHelp {
+		complain(err.Error())
+	}
+}
+
+// openWindow and complain are open and an error dialog, which tests
+// replace.
+var (
+	openWindow = open
+	complain   = func(msg string) { mygo.Dialog.Error("GoPR", msg) }
+)
+
 func main() {
-	req, err := parseArgs(os.Args[1:])
-	if err == errHelp {
+	if _, err := parseArgs(os.Args[1:]); err == errHelp {
 		fmt.Print(usage)
 		return
-	}
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(2)
 	}
 
 	name := "GoPR"
@@ -88,12 +105,7 @@ func main() {
 		if len(args) > 0 {
 			args = args[1:]
 		}
-		req, err := parseArgs(args)
-		if err != nil {
-			go mygo.Dialog.Error("GoPR", err.Error())
-			return
-		}
-		go open(req)
+		go launch(args)
 	})
 	cfg.migrateConfig()
 	state.open()
@@ -143,7 +155,7 @@ func main() {
 			go watchMainThread()
 		}
 		cfg.watch()
-		go open(req)
+		go launch(os.Args[1:])
 	})
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)
