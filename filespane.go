@@ -79,12 +79,30 @@ func (w *window) filesResizer(c *ui.Context, pal *palette) {
 
 // toggleFiles shows and hides the files pane.
 func (w *window) toggleFiles() {
+	w.focus = false
 	w.filesShown = !w.filesShown
 	if w.filesShown && w.filesWidth < filesMin {
 		w.filesWidth = filesDefault
 	}
 	w.filesDragWidth = w.filesWidth
 	w.saveFilesLayout()
+}
+
+// focusMaxWidth is how wide the review reads in focus mode.
+const focusMaxWidth = 1600
+
+// toggleFocus hides the sidebar and the files pane, leaving the review
+// centered, or shows them again as they were. It keeps the layout saved
+// as it was.
+func (w *window) toggleFocus() {
+	if w.focus {
+		w.focus = false
+		w.sidebarShown, w.filesShown = w.focusPrev[0], w.focusPrev[1]
+		return
+	}
+	w.focus = true
+	w.focusPrev = [2]bool{w.sidebarShown, w.filesShown}
+	w.sidebarShown, w.filesShown = false, false
 }
 
 // saveFilesLayout remembers the files pane's layout, off the main thread.

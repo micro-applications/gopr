@@ -84,6 +84,7 @@ from its name or URL.
 | <kbd>⌘O</kbd> | Open a pull request |
 | <kbd>⌘⇧E</kbd> | Toggle the files pane |
 | <kbd>⌘⇧B</kbd> | Toggle the sidebar |
+| <kbd>⌘⇧F</kbd> | Focus mode: hide the sidebar and files pane, and center the review |
 | <kbd>⌘R</kbd> | Refresh |
 | <kbd>⌘F</kbd> | Find in diffs |
 | <kbd>⌘P</kbd> | Filter files |

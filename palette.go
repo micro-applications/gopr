@@ -71,6 +71,7 @@ func (w *window) commands() []command {
 		}},
 		{title: "Open File in Editor", hint: selected, keys: "⌘⇧O", run: w.openCurrent},
 		{title: "Toggle Sidebar", keys: "⌘⇧B", run: w.toggleSidebar},
+		{title: "Toggle Focus Mode", keys: "⌘⇧F", run: w.toggleFocus},
 		{title: "Collapse All Files", run: func() { w.setAllCollapsed(true) }},
 		{title: "Expand All Files", run: func() { w.setAllCollapsed(false) }},
 		{title: "Toggle Diff Layout", hint: layout, run: toggleLayout},
@@ -347,7 +348,7 @@ func (w *window) shortcutsHelp(c *ui.Context) {
 	}{
 		{"Navigation", [][2]string{{"Command bar", "⌘K"}, {"Filter files", "⌘P"}, {"Next hunk", "J"}, {"Previous hunk", "K"},
 			{"Next AI note", "N"}, {"Previous AI note", "⇧N"},
-			{"Toggle sidebar", "⌘⇧B"}, {"Toggle files", "⌘⇧E"}, {"Toggle word wrap", "⌥Z"}, {"Open file in editor", "⌘⇧O"}, {"Refresh", "⌘R"}}},
+			{"Toggle sidebar", "⌘⇧B"}, {"Toggle files", "⌘⇧E"}, {"Focus mode", "⌘⇧F"}, {"Toggle word wrap", "⌥Z"}, {"Open file in editor", "⌘⇧O"}, {"Refresh", "⌘R"}}},
 		{"Search", [][2]string{{"Find in diffs", "⌘F"}, {"Next match", "↩"}, {"Previous match", "⇧↩"}, {"Close search", "Esc"}}},
 		{"Comments", [][2]string{{"Comment on a line", "Click"}, {"Comment on the hunk", "↩"}, {"Add comment", "⌘↩"}, {"Discard comment", "Esc"}}},
 		{"Pull requests", [][2]string{{"Open pull request", "⌘O"}, {"Review with AI", "⌘⇧I"}, {"Add to your review", "⌘↩"}, {"Reply", "⌘↩"}}},

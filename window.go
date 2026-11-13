@@ -72,6 +72,10 @@ type window struct {
 
 	// The sidebar.
 	sidebarShown bool
+	// focus hides the sidebar and the files pane, as they were in
+	// focusPrev, and centers the review.
+	focus        bool
+	focusPrev    [2]bool
 	sidebarWidth float32
 	dragWidth    float32
 

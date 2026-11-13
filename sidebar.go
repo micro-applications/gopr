@@ -308,6 +308,7 @@ func (w *window) sidebarToggle(c *ui.Context) {
 }
 
 func (w *window) toggleSidebar() {
+	w.focus = false
 	w.sidebarShown = !w.sidebarShown
 	if w.sidebarShown && w.sidebarWidth < sidebarMin {
 		w.sidebarWidth = sidebarDefault

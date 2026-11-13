@@ -269,12 +269,16 @@ func (w *window) mainArea(c *ui.Context, pal *palette) bool {
 		return false
 	}
 	built := false
-	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
+	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Justify(ui.Center).Children(func() {
 		if w.filesShown && len(w.files) > 0 {
 			w.filesPane(c, pal)
 			w.filesResizer(c, pal)
 		}
-		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
+		main := ui.Column(c).Grow(1).MinWidth(0).Label("Review area")
+		if w.focus {
+			main.MaxWidth(focusMaxWidth)
+		}
+		main.Children(func() {
 			if len(w.fileTabs) > 0 {
 				w.fileTabRow(c, pal)
 			}
@@ -310,7 +314,7 @@ func (w *window) review(c *ui.Context, pal *palette) bool {
 		})
 	}
 	// The groups show in the files pane; without it, here.
-	if len(w.files) > 0 && w.loadErr == nil && !w.filesShown {
+	if len(w.files) > 0 && w.loadErr == nil && !w.filesShown && !w.focus {
 		w.scopeBar(c, pal)
 	}
 	find := ui.FindBar(c, &w.finding, &w.query, len(w.matches), &w.match).Label("Find in diffs")

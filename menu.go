@@ -75,6 +75,7 @@ func buildMenu() *mygo.Menu {
 		{Label: "View", Submenu: []*mygo.MenuItem{
 			{Label: "Command Bar…", Accelerator: "CmdOrCtrl+K", Click: inWindow(func(w *window) { w.paletteOpen = !w.paletteOpen })},
 			{Label: "Toggle Sidebar", Accelerator: "CmdOrCtrl+Shift+B", Click: inWindow(func(w *window) { w.toggleSidebar() })},
+			{Label: "Focus Mode", Accelerator: "CmdOrCtrl+Shift+F", Click: inWindow(func(w *window) { w.toggleFocus() })},
 			mygo.Separator(),
 			{Label: "Review with AI", Accelerator: "CmdOrCtrl+Shift+I", Click: inWindow(func(w *window) { w.reviewWithAI() })},
 			{Label: "Group Files", Submenu: []*mygo.MenuItem{

@@ -178,3 +178,38 @@ func TestCalmLayout(t *testing.T) {
 		t.Errorf("no group chips without the files pane: %q", tt.Texts())
 	}
 }
+
+func TestFocusMode(t *testing.T) {
+	w, tt := openedDescribed(t, markdownDesc)
+	tt.SetSize(2000, 1100)
+	w.sidebarShown, w.filesShown = true, true
+	tt.Frame()
+	w.toggleFocus()
+	tt.Frame()
+	snapshot(t, tt, "focus")
+	if w.sidebarShown || w.filesShown {
+		t.Fatalf("focus mode shows the sidebar %v, the files %v", w.sidebarShown, w.filesShown)
+	}
+	area, ok := tt.Find("Review area")
+	if !ok {
+		t.Fatal("no review area")
+	}
+	if area.W > focusMaxWidth+0.5 {
+		t.Errorf("review %v wide in focus mode, want at most %v", area.W, focusMaxWidth)
+	}
+	if left, right := area.X, 2000-(area.X+area.W); left-right > 1 || right-left > 1 {
+		t.Errorf("review not centered: %v left, %v right", left, right)
+	}
+	w.toggleFocus()
+	tt.Frame()
+	if !w.sidebarShown || !w.filesShown || w.focus {
+		t.Errorf("leaving focus mode: sidebar %v, files %v, focus %v", w.sidebarShown, w.filesShown, w.focus)
+	}
+	// Showing a pane leaves focus mode.
+	w.toggleFocus()
+	w.toggleFiles()
+	tt.Frame()
+	if w.focus || !w.filesShown {
+		t.Errorf("showing the files kept focus mode %v, files %v", w.focus, w.filesShown)
+	}
+}
