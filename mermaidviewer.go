@@ -165,7 +165,7 @@ func (w *window) mermaidViewerView(c *ui.Context, pal *palette) {
 					v.zoomBy(-1)
 				}
 				ui.Text(c, fmt.Sprintf("%d%%", int(math.Round(float64(v.zoom*100))))).FontSize(12).
-					Font(w.codeFont()).Width(48).TextAlign(ui.Center).TextColor(t.TextMuted).Label("Zoom")
+					FontFeatures("tnum").Width(48).TextAlign(ui.Center).TextColor(t.TextMuted).Label("Zoom")
 				if iconButton(c, iconZoomIn, "Zoom In (+)").Size(28, 26).Label("Zoom In").Clicked() {
 					v.zoomBy(1)
 				}

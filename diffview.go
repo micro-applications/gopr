@@ -268,8 +268,8 @@ func (w *window) fileHeader(c *ui.Context, pal *palette, idx int, f *fileState, 
 		if countable(f) && (f.Additions > 0 || f.Deletions > 0) {
 			ui.Row(c).Gap(8).Padding(4, 9).Radius(14).Background(pal.pill).Shrink(0).
 				Tooltip(lines(f.Additions, "added") + ", " + lines(f.Deletions, "removed")).Children(func() {
-				ui.Text(c, "+"+thousands(f.Additions)).Font(w.codeFont()).FontSize(12).FontWeight(600).TextColor(pal.addText)
-				ui.Text(c, "-"+thousands(f.Deletions)).Font(w.codeFont()).FontSize(12).FontWeight(600).TextColor(pal.delText)
+				ui.Text(c, "+"+thousands(f.Additions)).FontFeatures("tnum").FontSize(12).FontWeight(500).TextColor(pal.addText)
+				ui.Text(c, "−"+thousands(f.Deletions)).FontFeatures("tnum").FontSize(12).FontWeight(500).TextColor(pal.delText)
 			})
 		}
 		if f.Generated {
@@ -280,7 +280,7 @@ func (w *window) fileHeader(c *ui.Context, pal *palette, idx int, f *fileState, 
 			ui.Row(c).Gap(4).Padding(4, 9).Radius(14).Background(pal.pill).TextColor(t.TextMuted).Shrink(0).
 				Tooltip(plural(n, "unresolved thread")).Children(func() {
 				ui.Icon(c, iconComment).FontSize(12)
-				ui.Text(c, itoa(n)).Font(w.codeFont()).FontSize(12).FontWeight(600)
+				ui.Text(c, itoa(n)).FontFeatures("tnum").FontSize(12).FontWeight(500)
 			})
 		}
 		if canPreview(f) {

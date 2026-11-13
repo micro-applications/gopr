@@ -137,7 +137,7 @@ func (w *window) pullHeader(c *ui.Context, pal *palette) ui.Element {
 	t := c.Theme()
 	p := w.pr
 	m := p.meta
-	return ui.Column(c).Padding(14, 16).Gap(10).Radius(cardRadius).Background(pal.headerBg).Border(1, pal.cardBorder).Children(func() {
+	return ui.Column(c).Padding(14, 16).Gap(10).Radius(cardRadius).Background(pal.headerBg).Children(func() {
 		ui.Row(c).Gap(10).AlignItems(ui.Start).Children(func() {
 			stateBadge(c, pal, m)
 			ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
@@ -174,7 +174,7 @@ func (w *window) pullHeader(c *ui.Context, pal *palette) ui.Element {
 				ui.Span{Text: "+" + thousands(m.Additions), Color: pal.addText},
 				ui.Span{Text: " −" + thousands(m.Deletions), Color: pal.delText},
 				ui.Span{Text: " · " + plural(m.ChangedFiles, "file"), Color: t.TextMuted},
-			).Font(w.codeFont()).FontSize(12).FontWeight(600)
+			).FontFeatures("tnum").FontSize(12).FontWeight(600)
 			if r := p.reviews; r != nil && len(r.Threads) > 0 {
 				open := 0
 				for _, th := range r.Threads {

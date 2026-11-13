@@ -475,7 +475,7 @@ func (w *window) fileTree(c *ui.Context) {
 						icon.TextColor(t.Danger)
 					}
 					ui.Text(c, n.name).FontSize(13).FontWeight(600).SingleLine().Grow(1).Shrink(1).MinWidth(0).Tooltip(g.summary)
-					ui.Textf(c, "%d", w.treeCount(key)).Font(w.codeFont()).FontSize(10).FontWeight(600).TextColor(muted).Shrink(0)
+					ui.Textf(c, "%d", w.treeCount(key)).FontFeatures("tnum").FontSize(10).FontWeight(500).TextColor(muted).Shrink(0)
 					return
 				}
 				ui.Icon(c, iconFolder).FontSize(14).TextColor(muted)
@@ -515,7 +515,7 @@ func (w *window) fileTree(c *ui.Context) {
 				ui.RichText(c,
 					ui.Span{Text: "+" + compact(f.Additions), Color: add},
 					ui.Span{Text: " −" + compact(f.Deletions), Color: del},
-				).Font(w.codeFont()).FontSize(10).FontWeight(500).Shrink(0).
+				).FontFeatures("tnum").FontSize(10).FontWeight(500).Shrink(0).
 					Tooltip(lines(f.Additions, "added") + ", " + lines(f.Deletions, "removed"))
 			}
 			letter := statusColor(f.Status, pal, t)
@@ -531,7 +531,7 @@ func (w *window) fileTree(c *ui.Context) {
 			if f.Status == diff.Modified && !w.reloaded[f.Path] {
 				ui.Box(c).Width(12).Shrink(0)
 			} else {
-				ui.Text(c, statusLetter(f)).Font(w.codeFont()).FontSize(11).FontWeight(700).TextColor(letter).
+				ui.Text(c, statusLetter(f)).FontFeatures("tnum").FontSize(11).FontWeight(600).TextColor(letter).
 					Width(12).TextAlign(ui.Center).Shrink(0).Tooltip(f.Status.Label())
 			}
 		})

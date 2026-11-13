@@ -335,7 +335,7 @@ func (w *window) summaryCard(c *ui.Context, pal *palette) ui.Element {
 				}
 				ui.Text(c, who+": "+st.progress).FontSize(12).TextColor(t.TextMuted).SingleLine().Grow(1).Shrink(1).MinWidth(0)
 				elapsed := w.now.Sub(st.started).Truncate(time.Second)
-				ui.Text(c, elapsed.String()).Font(w.codeFont()).FontSize(11).TextColor(t.TextMuted).Shrink(0)
+				ui.Text(c, elapsed.String()).FontFeatures("tnum").FontSize(11).TextColor(t.TextMuted).Shrink(0)
 				c.After(time.Second)
 			})
 		}

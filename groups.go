@@ -297,7 +297,7 @@ func (w *window) scopeBar(c *ui.Context, pal *palette) {
 					tip += ": " + g.summary
 				}
 				b := ui.ButtonBase(c.Key(g.key)).Height(26).Padding(0, 10, 0, 8).Gap(6).Radius(13).Label(g.label).Tooltip(tip).
-					Border(1, ui.RGBA(127, 127, 127, 0.18)).Shrink(0)
+					Background(ui.RGBA(127, 127, 127, 0.06)).Shrink(0)
 				switch {
 				case gi == active:
 					b.Background(t.Accent.Alpha(0.14)).Border(1, t.Accent.Alpha(0.45))
@@ -314,7 +314,7 @@ func (w *window) scopeBar(c *ui.Context, pal *palette) {
 						icon.TextColor(t.Danger)
 					}
 					ui.Text(c, g.label).FontSize(12).FontWeight(600).SingleLine()
-					count := ui.Textf(c, "%d/%d", viewed[gi], total[gi]).Font(w.codeFont()).FontSize(10).FontWeight(600).TextColor(t.TextMuted)
+					count := ui.Textf(c, "%d/%d", viewed[gi], total[gi]).FontFeatures("tnum").FontSize(10).FontWeight(500).TextColor(t.TextMuted)
 					if done {
 						count.TextColor(pal.viewed)
 					}
@@ -388,7 +388,7 @@ func (w *window) groupRow(c *ui.Context, pal *palette, gi int) {
 			}
 		})
 		if g.summary != "" {
-			ui.Text(c, g.summary).FontSize(13).TextColor(t.Text.Alpha(0.8)).Selectable().Padding(0, 0, 0, 23)
+			ui.Text(c, g.summary).FontSize(13).TextColor(t.TextMuted).Selectable().Padding(0, 0, 0, 23)
 		}
 	})
 }

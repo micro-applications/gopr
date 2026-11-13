@@ -308,7 +308,7 @@ func (w *window) inboxSectionHeader(c *ui.Context, s github.Section) {
 			ui.Text(c, title).FontSize(12).FontWeight(600).SingleLine().Shrink(1).MinWidth(0)
 			ui.Spacer(c)
 			if sec.err == nil && w.inbox.loaded {
-				ui.Text(c, thousands(sec.total)).Font(w.codeFont()).FontSize(10).FontWeight(600)
+				ui.Text(c, thousands(sec.total)).FontFeatures("tnum").FontSize(10).FontWeight(500)
 			}
 		})
 	})

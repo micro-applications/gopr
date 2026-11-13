@@ -189,7 +189,7 @@ func (w *window) toolbar(c *ui.Context, pal *palette) {
 			} else {
 				ui.Icon(c, iconComment).FontSize(15)
 			}
-			ui.Textf(c, "%d", n).Font(w.codeFont()).FontSize(11).FontWeight(700)
+			ui.Textf(c, "%d", n).FontFeatures("tnum").FontSize(11).FontWeight(500)
 		})
 		if w.source.kind == sourcePull {
 			w.reviewButton(c, pal)
@@ -404,7 +404,7 @@ func (w *window) commitMessage(c *ui.Context, pal *palette) ui.Element {
 			ui.Text(c, shortHash(cm.Hash)).Font(w.codeFont()).FontSize(12).TextColor(pal.ref).Selectable()
 		})
 		if cm.Body != "" {
-			ui.Text(c, cm.Body).FontSize(13).Selectable().Padding(4, 0, 0, 36).TextColor(t.Text.Alpha(0.85))
+			ui.Text(c, cm.Body).FontSize(13).Selectable().Padding(4, 0, 0, 36)
 		}
 	})
 }
@@ -413,11 +413,11 @@ func (w *window) commitMessage(c *ui.Context, pal *palette) ui.Element {
 func emptyPanel(c *ui.Context, pal *palette, title, detail string, actions func()) {
 	t := c.Theme()
 	ui.Column(c).Grow(1).Center().Padding(24).Children(func() {
-		ui.Column(c).MaxWidth(520).Padding(28).Gap(10).Radius(16).Background(pal.headerBg).Border(1, pal.cardBorder).AlignItems(ui.Center).Children(func() {
+		ui.Column(c).MaxWidth(520).Padding(28).Gap(10).Radius(16).Background(pal.headerBg).AlignItems(ui.Center).Children(func() {
 			ui.Icon(c, iconFileDiff).FontSize(28).TextColor(t.TextMuted)
 			ui.Text(c, title).FontSize(15).Bold().TextAlign(ui.Center)
 			if detail != "" {
-				ui.Text(c, detail).FontSize(13).Font("SF Mono, Menlo, monospace").TextColor(t.TextMuted).TextAlign(ui.Center).Selectable()
+				ui.Text(c, detail).FontSize(13).TextColor(t.TextMuted).TextAlign(ui.Center).Selectable()
 			}
 			if actions != nil {
 				ui.Row(c).Gap(8).Margin(6, 0, 0).Children(actions)
@@ -437,7 +437,7 @@ func thinking(c *ui.Context, status string) {
 		status = "Thinking…"
 	}
 	ui.Column(c).Grow(1).Center().Children(func() {
-		label := ui.Text(c, status).Italic().FontSize(13).Font("SF Mono, Menlo, monospace").TextColor(t.TextMuted)
+		label := ui.Text(c, status).Italic().FontSize(13).TextColor(t.TextMuted)
 		label.Opacity(0.5 + 0.5*label.Loop("pulse", 1600*time.Millisecond, ui.Bounce(ui.EaseInOut)))
 	})
 }
