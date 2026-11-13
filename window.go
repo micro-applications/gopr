@@ -130,9 +130,11 @@ type window struct {
 	// mermaid are the Mermaid diagrams of the previews, laid out or being.
 	mermaid map[mermaidKey]*mermaidDiagram
 	// viewer shows a diagram over the window, to zoom.
-	viewer    *mermaidViewer
-	mdOpts    map[string]*markdown.Options
-	mdOptsFor string
+	viewer *mermaidViewer
+	// ghMarkdown are the options of review comments\' Markdown, by body.
+	ghMarkdown map[string]*markdown.Options
+	mdOpts     map[string]*markdown.Options
+	mdOptsFor  string
 	// The revisions of the old and the new side of the last load; "" is
 	// the work tree.
 	oldRev, newRev string

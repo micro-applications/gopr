@@ -60,11 +60,13 @@ type fakeGitHub struct {
 	mu sync.Mutex
 	// body is the description of acme/app#1, as GitHub has it: a template's
 	// comment and a sentence when empty.
-	body     string
-	base     string
-	head     string
-	comments string
-	writes   []string
+	body string
+	// reviewBody is the body of cy\'s review: "Not yet." when empty.
+	reviewBody string
+	base       string
+	head       string
+	comments   string
+	writes     []string
 	// others are more pull requests, by their path in the API, as
 	// /repos/acme/web/pulls/1.
 	others map[string]fakePull
@@ -161,7 +163,12 @@ func (f *fakeGitHub) serve(t *testing.T) {
 		case "/repos/acme/app/pulls/1/comments":
 			fmt.Fprint(w, f.comments)
 		case "/repos/acme/app/pulls/1/reviews":
-			fmt.Fprint(w, `[{"id":9,"state":"CHANGES_REQUESTED","user":{"login":"cy"},"body":"Not yet."}]`)
+			review := f.reviewBody
+			if review == "" {
+				review = "Not yet."
+			}
+			quoted, _ := json.Marshal(review)
+			fmt.Fprintf(w, `[{"id":9,"state":"CHANGES_REQUESTED","user":{"login":"cy"},"body":%s}]`, quoted)
 		case "/user":
 			fmt.Fprint(w, `{"login":"ada"}`)
 		case "/graphql":

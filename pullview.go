@@ -262,7 +262,9 @@ func (w *window) reviewSummary(c *ui.Context, pal *palette, s github.ReviewSumma
 			).FontSize(12)
 		})
 		if body := plainBody(s.Body); body != "" {
-			ui.Text(c, body).FontSize(13).Selectable().Padding(0, 0, 0, 44).TextColor(t.Text.Alpha(0.88))
+			ui.Column(c).Padding(0, 0, 0, 44).Label("Review").Children(func() {
+				w.commentMarkdown(c, "review\x00"+body, body)
+			})
 		}
 	})
 }
@@ -444,7 +446,11 @@ func (w *window) threadComment(c *ui.Context, pal *palette, th *github.Thread, c
 				})
 				return
 			}
-			ui.Text(c, plainBody(cm.Body)).FontSize(13).Selectable()
+			if body := plainBody(cm.Body); body != "" {
+				ui.Column(c).Label("Comment").Children(func() {
+					w.commentMarkdown(c, "comment\x00"+body, body)
+				})
+			}
 		})
 	})
 }
@@ -767,27 +773,52 @@ var openExternal = func(url string) { go mygo.Shell.OpenExternal(url) }
 const descCollapsed = 180
 
 // description shows a pull request's description as its Markdown reads,
-// in the previews' type: links open in the browser; its pictures, which
-// GitHub keeps behind the user's sign-in, show as their descriptions, and
-// its HTML as its text.
+// in the previews' type.
 func (w *window) description(c *ui.Context, p *pullState, body string) {
-	size := float32(w.settings.MarkdownFontSize)
-	o := p.descOpts
-	if o == nil {
-		o = &markdown.Options{
-			OnLink: func(url string) {
-				if strings.HasPrefix(url, "https://") || strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "mailto:") {
-					openExternal(url)
-				}
-			},
-			HTML: func(c *ui.Context, html string) {
-				if text := htmlText(html); text != "" {
-					ui.Text(c, text).TextColor(c.Theme().TextMuted).Selectable()
-				}
-			},
-		}
-		p.descOpts = o
+	if p.descOpts == nil {
+		p.descOpts = githubMarkdownOptions()
 	}
+	githubMarkdown(c, p.descOpts, body, float32(w.settings.MarkdownFontSize))
+}
+
+// commentMarkdown shows a review comment's Markdown, its options kept by
+// key for the frames after.
+func (w *window) commentMarkdown(c *ui.Context, key, body string) {
+	o := w.ghMarkdown[key]
+	if o == nil {
+		if w.ghMarkdown == nil || len(w.ghMarkdown) >= 512 {
+			w.ghMarkdown = map[string]*markdown.Options{}
+		}
+		o = githubMarkdownOptions()
+		w.ghMarkdown[key] = o
+	}
+	githubMarkdown(c, o, body, commentTextSize)
+}
+
+// commentTextSize is the size of review comments' text.
+const commentTextSize = 13
+
+// githubMarkdownOptions are the options of Markdown from GitHub: links open
+// in the browser; its pictures, which GitHub keeps behind the user's
+// sign-in, show as their descriptions, and its HTML as its text.
+func githubMarkdownOptions() *markdown.Options {
+	return &markdown.Options{
+		OnLink: func(url string) {
+			if strings.HasPrefix(url, "https://") || strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "mailto:") {
+				openExternal(url)
+			}
+		},
+		HTML: func(c *ui.Context, html string) {
+			if text := htmlText(html); text != "" {
+				ui.Text(c, text).TextColor(c.Theme().TextMuted).Selectable()
+			}
+		},
+	}
+}
+
+// githubMarkdown shows Markdown from GitHub in the previews' type, its text
+// size DIPs.
+func githubMarkdown(c *ui.Context, o *markdown.Options, body string, size float32) {
 	if o.Theme == nil || o.Theme.FontSize != size {
 		o.Theme = markdownTheme(size)
 	}

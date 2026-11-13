@@ -100,3 +100,41 @@ func TestHTMLText(t *testing.T) {
 		}
 	}
 }
+
+func TestCommentsMarkdown(t *testing.T) {
+	freshState(t)
+	clone, base, head := pullClone(t, acmeApp)
+	(&fakeGitHub{base: base, head: head, reviewBody: "Please **rename** `greet` first.", comments: `[
+		{"id":1,"path":"main.go","side":"RIGHT","line":6,"user":{"login":"cy"},"body":"Why the *exclamation* mark?\n\n- louder\n- shorter","created_at":"2026-10-01T10:00:00Z"},
+		{"id":2,"in_reply_to_id":1,"path":"main.go","side":"RIGHT","line":6,"user":{"login":"bo"},"body":"See [the guide](https://example.com/guide).","created_at":"2026-10-01T11:00:00Z"}]`}).serve(t)
+	fakeResolve(t, map[github.Repo]string{acmeApp: realPath(t, clone)})
+	w, tt := emptyWindow(t)
+	w.openPull(acmeApp, 1)
+	tt.SetSize(1400, 1200)
+	for range 5 {
+		tt.Frame()
+	}
+	snapshot(t, tt, "comments-markdown")
+	for _, want := range []string{"rename", "greet", "exclamation", "louder", "shorter", "the guide"} {
+		if !tt.HasText(want) {
+			t.Errorf("no %q in %q", want, tt.Texts())
+		}
+	}
+	texts := strings.Join(tt.Texts(), "\n")
+	for _, raw := range []string{"**rename**", "`greet`", "*exclamation*", "- louder", "](https://"} {
+		if strings.Contains(texts, raw) {
+			t.Errorf("a comment shows %q as written", raw)
+		}
+	}
+	var opened []string
+	old := openExternal
+	openExternal = func(url string) { opened = append(opened, url) }
+	t.Cleanup(func() { openExternal = old })
+	if err := tt.Click("the guide"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if len(opened) != 1 || opened[0] != "https://example.com/guide" {
+		t.Errorf("opened %q", opened)
+	}
+}
