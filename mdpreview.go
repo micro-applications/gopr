@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/egoist/godiff/internal/diff"
-	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
 )
@@ -122,7 +121,7 @@ func (w *window) openMarkdownLink(dir, raw string) {
 	}
 	switch strings.ToLower(u.Scheme) {
 	case "http", "https", "mailto":
-		mygo.Shell.OpenExternal(raw)
+		openExternal(raw)
 		return
 	case "":
 	default:

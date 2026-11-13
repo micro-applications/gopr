@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/egoist/mygo/ui/markdown"
 	"strconv"
 	"strings"
 	"sync"
@@ -120,6 +121,11 @@ type pullState struct {
 	checkedAt time.Time
 
 	descOpen bool
+	// descOpts are the options of the description, rendered as Markdown,
+	// which keep its parse.
+	descOpts *markdown.Options
+	// descHeight is how tall the description is laid out whole.
+	descHeight float32
 	// Drafts of replies, the comment edited, and threads shown open,
 	// resolved or outdated as they are.
 	replies  map[int64]*string

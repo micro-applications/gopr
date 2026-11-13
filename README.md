@@ -30,6 +30,9 @@ your disk, or clones it, and shows the pull request there.
 - **Full-file tabs**: double-click a file in the files pane (or use its
   card's button, its context menu, or <kbd>F</kbd> on a hunk) to read its
   whole contents in a tab beside the diff, and close the tab when done.
+- **PR descriptions** read as Markdown, in the previews' type: headings,
+  lists, code and links (which open in the browser); a long one shows its
+  start, faded, until **Show more**.
 - **Markdown preview** of `.md`, `.markdown` and `.mdx` files in their tabs
   (Changes always shows their diff; a card's **Preview** button opens the
   tab). Previews are centered at a readable width — Narrow, Medium (the

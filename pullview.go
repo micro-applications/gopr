@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"github.com/egoist/godiff/internal/github"
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/markdown"
 )
 
 // pullRow is a pull request as a list shows it: its title, its
@@ -176,11 +178,24 @@ func (w *window) pullHeader(c *ui.Context, pal *palette) ui.Element {
 		})
 		if body := plainBody(m.Body); body != "" {
 			ui.Column(c).Gap(4).Children(func() {
-				text := ui.Text(c, body).FontSize(13).Selectable().TextColor(t.Text.Alpha(0.88))
-				long := strings.Count(body, "\n") > 6 || len(body) > 600
+				// Long once laid out taller than it shows collapsed, and
+				// some: a little more shows whole.
+				long := p.descHeight > descCollapsed+48
+				desc := ui.Column(c).Label("Pull request description")
 				if long && !p.descOpen {
-					text.MaxLines(6)
+					// It fades out where it is cut.
+					desc.MaxHeight(descCollapsed).ClipY().DrawOver(func(pt *ui.Painter, r ui.Rect) {
+						fade := ui.Rect{X: r.X, Y: r.Y + r.H - 36, W: r.W, H: 36}
+						pt.FillGradient(fade, ui.LinearGradient{From: pal.headerBg.Alpha(0), To: pal.headerBg, Angle: 180}, 0)
+					})
 				}
+				desc.Children(func() {
+					inner := ui.Column(c).Shrink(0).Children(func() { w.description(c, p, body) })
+					if h := inner.Bounds().H; h > 0 && h != p.descHeight {
+						p.descHeight = h
+						c.After(0)
+					}
+				})
 				if long {
 					label := "Show more"
 					if p.descOpen {
@@ -743,4 +758,58 @@ func avatarImage(u github.User) *ui.Bitmap {
 		}
 	}()
 	return nil
+}
+
+// openExternal opens a link in the browser: tests set it.
+var openExternal = func(url string) { go mygo.Shell.OpenExternal(url) }
+
+// descCollapsed is how tall a long description shows until Show more.
+const descCollapsed = 180
+
+// description shows a pull request's description as its Markdown reads,
+// in the previews' type: links open in the browser; its pictures, which
+// GitHub keeps behind the user's sign-in, show as their descriptions, and
+// its HTML as its text.
+func (w *window) description(c *ui.Context, p *pullState, body string) {
+	size := float32(w.settings.MarkdownFontSize)
+	o := p.descOpts
+	if o == nil {
+		o = &markdown.Options{
+			OnLink: func(url string) {
+				if strings.HasPrefix(url, "https://") || strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "mailto:") {
+					openExternal(url)
+				}
+			},
+			HTML: func(c *ui.Context, html string) {
+				if text := htmlText(html); text != "" {
+					ui.Text(c, text).TextColor(c.Theme().TextMuted).Selectable()
+				}
+			},
+		}
+		p.descOpts = o
+	}
+	if o.Theme == nil || o.Theme.FontSize != size {
+		o.Theme = markdownTheme(size)
+	}
+	markdown.View(c, body, o)
+}
+
+var (
+	htmlTag   = regexp.MustCompile(`(?s)<[^>]*>`)
+	htmlAlt   = regexp.MustCompile(`(?i)<img\b[^>]*\balt="([^"]*)"[^>]*>`)
+	htmlSpace = regexp.MustCompile(`[ \t]+`)
+)
+
+// htmlText is the text of an HTML block of a description: its tags left
+// out, a picture as its description.
+func htmlText(html string) string {
+	html = htmlAlt.ReplaceAllString(html, "[$1]")
+	html = htmlTag.ReplaceAllString(html, "")
+	var lines []string
+	for _, l := range strings.Split(html, "\n") {
+		if l = strings.TrimSpace(htmlSpace.ReplaceAllString(l, " ")); l != "" {
+			lines = append(lines, l)
+		}
+	}
+	return strings.Join(lines, "\n")
 }

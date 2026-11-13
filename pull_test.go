@@ -57,7 +57,10 @@ func TestKindOf(t *testing.T) {
 // fakeGitHub answers as GitHub's API does for acme/app#1, and the pull
 // requests of others, and records the writes.
 type fakeGitHub struct {
-	mu       sync.Mutex
+	mu sync.Mutex
+	// body is the description of acme/app#1, as GitHub has it: a template's
+	// comment and a sentence when empty.
+	body     string
 	base     string
 	head     string
 	comments string
@@ -147,9 +150,14 @@ func (f *fakeGitHub) serve(t *testing.T) {
 		}
 		switch r.URL.Path {
 		case "/repos/acme/app/pulls/1":
-			fmt.Fprintf(w, `{"number":1,"title":"Greet louder","body":"<!-- template -->\nMakes the greeting shorter.","state":"open","user":{"login":"bo"},
+			body := f.body
+			if body == "" {
+				body = "<!-- template -->\nMakes the greeting shorter."
+			}
+			quoted, _ := json.Marshal(body)
+			fmt.Fprintf(w, `{"number":1,"title":"Greet louder","body":%s,"state":"open","user":{"login":"bo"},
 				"html_url":"https://github.com/acme/app/pull/1","base":{"ref":"main","sha":%q,"label":"acme:main"},
-				"head":{"ref":"greet","sha":%q,"label":"bo:greet"},"additions":3,"deletions":1,"changed_files":2,"commits":1}`, f.base, f.head)
+				"head":{"ref":"greet","sha":%q,"label":"bo:greet"},"additions":3,"deletions":1,"changed_files":2,"commits":1}`, quoted, f.base, f.head)
 		case "/repos/acme/app/pulls/1/comments":
 			fmt.Fprint(w, f.comments)
 		case "/repos/acme/app/pulls/1/reviews":
