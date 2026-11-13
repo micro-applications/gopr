@@ -141,11 +141,9 @@ func (w *window) toolbar(c *ui.Context, pal *palette) {
 		case sourcePull:
 			repo, n := w.source.pull()
 			tip := repo.String()
-			if w.pr != nil && w.pr.meta != nil {
-				tip = w.pr.meta.Title
-				chip(c, pal, iconPull, fmt.Sprintf("#%d", n), pal.ref).Tooltip(tip).Shrink(0)
-				chip(c, pal, iconBranch, w.pr.meta.Base.Ref+" ← "+w.pr.meta.Head.Ref, t.TextMuted).Tooltip(w.pr.meta.Base.Label + " ← " + w.pr.meta.Head.Label)
-			} else {
+			// Once the pull request is read, its header says its number
+			// and branches.
+			if w.pr == nil || w.pr.meta == nil {
 				chip(c, pal, iconPull, fmt.Sprintf("#%d", n), pal.ref).Tooltip(tip).Shrink(0)
 			}
 		}
@@ -311,7 +309,8 @@ func (w *window) review(c *ui.Context, pal *palette) bool {
 			})
 		})
 	}
-	if len(w.files) > 0 && w.loadErr == nil {
+	// The groups show in the files pane; without it, here.
+	if len(w.files) > 0 && w.loadErr == nil && !w.filesShown {
 		w.scopeBar(c, pal)
 	}
 	find := ui.FindBar(c, &w.finding, &w.query, len(w.matches), &w.match).Label("Find in diffs")

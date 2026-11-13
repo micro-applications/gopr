@@ -218,7 +218,7 @@ func (w *window) inboxBody(c *ui.Context) {
 			current := w.source == pullSource(p.Repo, p.Number) ||
 				(w.opening != nil && w.opening.repo == p.Repo && w.opening.number == p.Number)
 			selected := key == in.sel && in.list.FocusWithin(c)
-			row := pullRow(c, w, pal, &p.Summary, p.Repo.String(), current, selected)
+			row := pullRow(c, w, pal, &p.Summary, p.Repo.String(), it.section != github.Mine, current, selected)
 			if row.Clicked() {
 				choose(p)
 			}

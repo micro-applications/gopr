@@ -19,7 +19,7 @@ import (
 // repository when given, as acme/api, its number, author and age, and how
 // its review and checks stand. current is the pull request shown, selected
 // that one while its list has the focus. The caller handles its clicks.
-func pullRow(c *ui.Context, w *window, pal *palette, p *github.Summary, repo string, current, selected bool) ui.Element {
+func pullRow(c *ui.Context, w *window, pal *palette, p *github.Summary, repo string, author, current, selected bool) ui.Element {
 	t := c.Theme()
 	row := ui.Row(c).Gap(8).Padding(6, 8).Radius(6).AlignItems(ui.Start).Role(ui.RoleButton).Label(p.Title)
 	muted, ref := t.TextMuted, pal.ref
@@ -48,12 +48,23 @@ func pullRow(c *ui.Context, w *window, pal *palette, p *github.Summary, repo str
 		ui.Icon(c, icon).FontSize(14).TextColor(color).Margin(1, 0, 0).Shrink(0)
 		ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
 			ui.Text(c, p.Title).FontSize(12).FontWeight(500).MaxLines(2)
-			ui.Row(c).Gap(5).Children(func() {
+			// The repository by its name alone (the tooltip has its owner),
+			// the author unless it is the viewer, and how long ago.
+			ui.Row(c).Gap(4).Children(func() {
+				dot := func() { ui.Text(c, "·").FontSize(10).TextColor(muted).Shrink(0) }
 				if repo != "" {
-					ui.Text(c, repo).FontSize(10).TextColor(muted).SingleLine().Shrink(1).MinWidth(0)
+					name := repo
+					if i := strings.LastIndexByte(repo, '/'); i >= 0 {
+						name = repo[i+1:]
+					}
+					ui.Text(c, name).FontSize(10).TextColor(muted).SingleLine().Shrink(1).MinWidth(0)
 				}
-				ui.Textf(c, "#%d", p.Number).Font(w.codeFont()).FontSize(10).TextColor(ref).Shrink(0)
-				ui.Text(c, p.Author.Login).FontSize(10).TextColor(muted).SingleLine().Shrink(1).MinWidth(0)
+				ui.Textf(c, "#%d", p.Number).FontSize(10).TextColor(ref).Shrink(0)
+				if author {
+					dot()
+					ui.Text(c, p.Author.Login).FontSize(10).TextColor(muted).SingleLine().Shrink(1).MinWidth(0)
+				}
+				dot()
 				ui.Text(c, relativeTime(w.now, p.UpdatedAt)).FontSize(10).TextColor(muted).Shrink(0)
 				ui.Spacer(c)
 				switch p.ReviewDecision {
@@ -62,9 +73,10 @@ func pullRow(c *ui.Context, w *window, pal *palette, p *github.Summary, repo str
 				case "changes_requested":
 					ui.Icon(c, iconXCircle).FontSize(12).TextColor(pickColor(selected, t.AccentText, t.Danger)).Tooltip("Changes requested").Shrink(0)
 				}
-				if p.Checks != "" {
+				// Passing checks are the usual case: a dot marks the others.
+				if p.Checks != "" && p.Checks != "success" {
 					color := map[string]ui.Color{"success": pal.addBar, "failure": t.Danger, "pending": ui.Hex("#d4a72c")}[p.Checks]
-					ui.Box(c).Size(7, 7).Radius(4).Background(color).Tooltip("Checks: " + p.Checks).Shrink(0)
+					ui.Box(c).Size(7, 7).Radius(4).Background(color).Label("Checks: " + p.Checks).Tooltip("Checks: " + p.Checks).Shrink(0)
 				}
 			})
 		})
@@ -182,6 +194,10 @@ func (w *window) pullHeader(c *ui.Context, pal *palette) ui.Element {
 				// some: a little more shows whole.
 				long := p.descHeight > descCollapsed+48
 				desc := ui.Column(c).Label("Pull request description")
+				// Read at the previews' width, as a document is.
+				if mw := w.markdownMax(); mw > 0 {
+					desc.MaxWidth(mw)
+				}
 				if long && !p.descOpen {
 					// It fades out where it is cut.
 					desc.MaxHeight(descCollapsed).ClipY().DrawOver(func(pt *ui.Painter, r ui.Rect) {
@@ -211,7 +227,11 @@ func (w *window) pullHeader(c *ui.Context, pal *palette) ui.Element {
 			})
 		}
 		if r := p.reviews; r != nil && len(r.Summaries) > 0 {
-			ui.Column(c).Gap(8).Padding(10, 0, 0).BorderWidth(1, 0, 0, 0).BorderColor(pal.cardBorder).Children(func() {
+			reviews := ui.Column(c).Gap(8).Padding(10, 0, 0).BorderWidth(1, 0, 0, 0).BorderColor(pal.cardBorder)
+			if mw := w.markdownMax(); mw > 0 {
+				reviews.MaxWidth(mw + 44)
+			}
+			reviews.Children(func() {
 				for _, s := range r.Summaries {
 					w.reviewSummary(c, pal, s)
 				}

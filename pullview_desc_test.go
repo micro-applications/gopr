@@ -138,3 +138,43 @@ func TestCommentsMarkdown(t *testing.T) {
 		t.Errorf("opened %q", opened)
 	}
 }
+
+func TestCalmLayout(t *testing.T) {
+	long := strings.Repeat("A sentence of the description that goes on. ", 60)
+	w, tt := openedDescribed(t, long)
+	tt.SetSize(2000, 1100)
+	tt.Frame()
+	snapshot(t, tt, "calm")
+	desc, ok := tt.Find("Pull request description")
+	if !ok {
+		t.Fatal("no description")
+	}
+	if max := w.markdownMax(); desc.W > max+0.5 {
+		t.Errorf("description %v wide, want at most %v", desc.W, max)
+	}
+	texts := strings.Join(tt.Texts(), "\n")
+	// The header says the branches: the toolbar does not again.
+	if strings.Contains(texts, "←") {
+		t.Errorf("the toolbar shows the branches: %q", tt.Texts())
+	}
+	scope := func() bool {
+		for _, s := range tt.Texts() {
+			if a, b, ok := strings.Cut(s, "/"); ok && a != "" && b != "" && strings.Trim(a+b, "0123456789") == "" {
+				return true
+			}
+		}
+		return false
+	}
+	// The groups show in the files pane, and above the diffs without it.
+	if !w.filesShown {
+		t.Fatal("the files pane is hidden")
+	}
+	if scope() {
+		t.Errorf("the group chips show beside the files pane: %q", tt.Texts())
+	}
+	w.toggleFiles()
+	tt.Frame()
+	if !scope() {
+		t.Errorf("no group chips without the files pane: %q", tt.Texts())
+	}
+}

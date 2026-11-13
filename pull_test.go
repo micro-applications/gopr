@@ -626,24 +626,44 @@ func TestAINotes(t *testing.T) {
 func TestPullRow(t *testing.T) {
 	freshState(t)
 	w := newWindow(nil, source{})
-	p := &github.Summary{Number: 4, Title: "Add limiter", Author: github.User{Login: "bo"}, ReviewDecision: "approved"}
+	p := &github.Summary{Number: 4, Title: "Add limiter", Author: github.User{Login: "bo"}, ReviewDecision: "approved", Checks: "success"}
 	for _, repo := range []string{"acme/api", ""} {
-		tt := ui.NewTester(func(c *ui.Context) {
-			pullRow(c, w, paletteFor(c.Theme()), p, repo, false, false)
-		}, 400, 80)
-		tt.Frame()
-		for _, want := range []string{"Add limiter", "#4", "bo"} {
-			if _, ok := tt.Find(want); !ok {
-				t.Errorf("repo %q: no %q in %q", repo, want, tt.Texts())
+		for _, author := range []bool{true, false} {
+			tt := ui.NewTester(func(c *ui.Context) {
+				pullRow(c, w, paletteFor(c.Theme()), p, repo, author, false, false)
+			}, 400, 80)
+			tt.Frame()
+			for _, want := range []string{"Add limiter", "#4"} {
+				if _, ok := tt.Find(want); !ok {
+					t.Errorf("repo %q: no %q in %q", repo, want, tt.Texts())
+				}
+			}
+			if _, ok := tt.Find("bo"); ok != author {
+				t.Errorf("author %v: bo shown %v in %q", author, ok, tt.Texts())
+			}
+			// The repository shows by its name; its owner is in the tooltip.
+			if _, ok := tt.Find("acme/api"); ok {
+				t.Errorf("repo %q: owner shown in %q", repo, tt.Texts())
+			}
+			if _, ok := tt.Find("api"); ok != (repo != "") {
+				t.Errorf("repo %q: api shown %v in %q", repo, ok, tt.Texts())
+			}
+			repoBox, _ := tt.Find("api")
+			number, _ := tt.Find("#4")
+			if repo != "" && repoBox.X >= number.X {
+				t.Errorf("the repository %+v is not before the number %+v", repoBox, number)
+			}
+			if _, ok := tt.Find("Checks: success"); ok {
+				t.Error("passing checks marked")
 			}
 		}
-		if _, ok := tt.Find("acme/api"); ok != (repo != "") {
-			t.Errorf("repo %q: acme/api shown %v in %q", repo, ok, tt.Texts())
-		}
-		repoBox, _ := tt.Find("acme/api")
-		number, _ := tt.Find("#4")
-		if repo != "" && repoBox.X >= number.X {
-			t.Errorf("the repository %+v is not before the number %+v", repoBox, number)
-		}
+	}
+	p.Checks = "failure"
+	tt := ui.NewTester(func(c *ui.Context) {
+		pullRow(c, w, paletteFor(c.Theme()), p, "acme/api", true, false, false)
+	}, 400, 80)
+	tt.Frame()
+	if _, ok := tt.Find("Checks: failure"); !ok {
+		t.Error("failing checks not marked")
 	}
 }

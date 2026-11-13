@@ -57,7 +57,7 @@ func TestInboxSections(t *testing.T) {
 	f.mineTotal = 150
 	_, tt := inboxWindow(t, f)
 	snapshot(t, tt, "inbox")
-	for _, want := range []string{"My pull requests", "Waiting on my review", "Add limiter", "Fix login", "acme/api"} {
+	for _, want := range []string{"My pull requests", "Waiting on my review", "Add limiter", "Fix login", "api"} {
 		if _, ok := tt.Find(want); !ok {
 			t.Errorf("no %q in %q", want, tt.Texts())
 		}

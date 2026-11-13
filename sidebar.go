@@ -504,8 +504,18 @@ func (w *window) fileTree(c *ui.Context) {
 				ui.Icon(c, iconSparkle).FontSize(11).TextColor(color).Shrink(0).Tooltip(plural(len(notes), "AI note"))
 			}
 			if countable(f) && (f.Additions > 0 || f.Deletions > 0) {
-				ui.Textf(c, "+%s -%s", compact(f.Additions), compact(f.Deletions)).
-					Font(w.codeFont()).FontSize(10).FontWeight(600).TextColor(muted).Shrink(0).
+				// Grey, in color on the row pointed at or chosen.
+				add, del := muted.Alpha(0.75), muted.Alpha(0.75)
+				switch {
+				case selected && focused:
+					add, del = muted, muted
+				case selected || row.Hovered():
+					add, del = pal.addText, pal.delText
+				}
+				ui.RichText(c,
+					ui.Span{Text: "+" + compact(f.Additions), Color: add},
+					ui.Span{Text: " −" + compact(f.Deletions), Color: del},
+				).Font(w.codeFont()).FontSize(10).FontWeight(500).Shrink(0).
 					Tooltip(lines(f.Additions, "added") + ", " + lines(f.Deletions, "removed"))
 			}
 			letter := statusColor(f.Status, pal, t)
@@ -517,8 +527,13 @@ func (w *window) fileTree(c *ui.Context) {
 			case w.reloaded[f.Path]:
 				letter = pal.ref
 			}
-			ui.Text(c, statusLetter(f)).Font(w.codeFont()).FontSize(11).FontWeight(700).TextColor(letter).
-				Width(12).TextAlign(ui.Center).Shrink(0).Tooltip(f.Status.Label())
+			// Modified is what most files are: the letter marks the others.
+			if f.Status == diff.Modified && !w.reloaded[f.Path] {
+				ui.Box(c).Width(12).Shrink(0)
+			} else {
+				ui.Text(c, statusLetter(f)).Font(w.codeFont()).FontSize(11).FontWeight(700).TextColor(letter).
+					Width(12).TextAlign(ui.Center).Shrink(0).Tooltip(f.Status.Label())
+			}
 		})
 	}).Grow(1).Padding(2, 8).Gap(1).Focusable().FocusRing(false).Label("Changed files")
 
