@@ -677,41 +677,6 @@ func installedAgents() ([]agent.Agent, bool) {
 	return agentsFound.list, agentsFound.done
 }
 
-// groupControl chooses how the files group: not at all, by kind, or by
-// the agent's review, which it asks for when there is none.
-func (w *window) groupControl(c *ui.Context, pal *palette) {
-	t := c.Theme()
-	modes := []groupMode{groupNone, groupKind, groupAI}
-	current := slices.Index(modes, w.grouping())
-	st := w.analyses[w.source]
-	running := st != nil && st.running
-	choice := current
-	seg := ui.SegmentedBase(c, &choice, len(modes))
-	seg.Track.Padding(2).Gap(2).Radius(8).Background(ui.RGBA(127, 127, 127, 0.1)).Label("Group files").Children(func() {
-		for i, it := range []struct {
-			icon *ui.SVG
-			name string
-		}{{iconList, "No groups"}, {iconLayers, "Group by kind"}, {iconSparkle, "Group by an AI review"}} {
-			s := seg.Segment(i).Size(30, 24).Radius(6).Center().Label(it.name).Tooltip(it.name).TextColor(t.TextMuted)
-			if i == current {
-				s.Background(pal.headerBg).Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.12)).TextColor(t.Text)
-			}
-			s.OnClick(func() { w.chooseGrouping(modes[i]) })
-			s.Children(func() {
-				if i == 2 && running {
-					// A review under way. A spinner is painted again, as
-					// the card's, where an animation of the icon would
-					// build the window again at every frame.
-					ui.Spinner(c).Size(14, 14)
-					return
-				}
-				ui.Icon(c, it.icon).FontSize(15)
-			})
-		}
-	})
-
-}
-
 // chooseGrouping groups the files as the user chose. Grouping by an AI
 // review there is not yet offers one: an agent runs only when asked.
 func (w *window) chooseGrouping(mode groupMode) {

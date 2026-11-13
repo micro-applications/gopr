@@ -213,3 +213,46 @@ func TestFocusMode(t *testing.T) {
 		t.Errorf("showing the files kept focus mode %v, files %v", w.focus, w.filesShown)
 	}
 }
+
+func TestToolbarMore(t *testing.T) {
+	w, tt := openedDescribed(t, markdownDesc)
+	// The copy button shows once there are comments to copy.
+	if _, ok := tt.Find("Copy review comments"); ok {
+		t.Error("a copy button without comments")
+	}
+	for _, gone := range []string{"Group files", "Diff layout"} {
+		if _, ok := tt.Find(gone); ok {
+			t.Errorf("the toolbar still has %q", gone)
+		}
+	}
+	if err := tt.Click("More"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	items := strings.Join(tt.Menu(), "|")
+	for _, want := range []string{"Review with AI", "Group Files", "Diff Layout", "Focus Mode", "Copy Review Comments"} {
+		if !strings.Contains(items, want) {
+			t.Errorf("no %q in the menu %q", want, items)
+		}
+	}
+	if err := tt.ChooseMenuItem("Focus Mode"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	tt.Frame()
+	if !w.focus {
+		t.Error("Focus Mode did not focus")
+	}
+	if err := tt.Click("More"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if err := tt.ChooseMenuItem("Group Files", "Not at All"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	tt.Frame()
+	if w.grouping() != groupNone {
+		t.Errorf("grouping %v, want none", w.grouping())
+	}
+}

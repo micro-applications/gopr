@@ -169,33 +169,95 @@ func (w *window) toolbar(c *ui.Context, pal *palette) {
 			open := w.findOpen()
 			*open = !*open
 		}
+		// The comments to copy, while there are some.
 		n := w.pendingComments()
 		copied := time.Since(w.copiedAt) < 2*time.Second
-		cb := ui.ButtonBase(c).Height(28).Padding(0, 8).Gap(5).Radius(7).TextColor(t.TextMuted).
-			Label("Copy review comments").Tooltip("Copy review comments as Markdown").Disabled(n == 0)
-		if n == 0 {
-			cb.Opacity(0.5)
+		if n > 0 || copied {
+			w.copyCommentsButton(c, pal, n, copied)
 		}
-		if cb.Hovered() {
-			cb.Background(ui.RGBA(127, 127, 127, 0.13))
-		}
-		if cb.Clicked() {
-			w.copyComments()
-			c.After(2 * time.Second)
-		}
-		cb.Children(func() {
-			if copied {
-				ui.Icon(c, iconCheck).FontSize(15).TextColor(pal.viewed)
-			} else {
-				ui.Icon(c, iconComment).FontSize(15)
-			}
-			ui.Textf(c, "%d", n).FontFeatures("tnum").FontSize(11).FontWeight(500)
-		})
 		if w.source.kind == sourcePull {
 			w.reviewButton(c, pal)
 		}
-		w.groupControl(c, pal)
-		w.layoutControl(c, pal)
+		w.moreMenu(c, n)
+	})
+}
+
+// copyCommentsButton copies the n review comments written, as Markdown.
+func (w *window) copyCommentsButton(c *ui.Context, pal *palette, n int, copied bool) {
+	t := c.Theme()
+	cb := ui.ButtonBase(c).Height(28).Padding(0, 8).Gap(5).Radius(7).TextColor(t.TextMuted).
+		Label("Copy review comments").Tooltip("Copy review comments as Markdown")
+	if cb.Hovered() {
+		cb.Background(ui.RGBA(127, 127, 127, 0.13))
+	}
+	if cb.Clicked() {
+		w.copyComments()
+		c.After(2 * time.Second)
+	}
+	cb.Children(func() {
+		if copied {
+			ui.Icon(c, iconCheck).FontSize(15).TextColor(pal.viewed)
+		} else {
+			ui.Icon(c, iconComment).FontSize(15)
+		}
+		ui.Textf(c, "%d", n).FontFeatures("tnum").FontSize(11).FontWeight(500)
+	})
+}
+
+// moreMenu holds what the toolbar does less often: the AI review, how
+// files group, the diffs' layout, and focus mode. A spinner beside it
+// says an AI review is under way.
+func (w *window) moreMenu(c *ui.Context, comments int) {
+	if st := w.analyses[w.source]; st != nil && st.running {
+		ui.Spinner(c).Size(14, 14).Label("AI review running").Tooltip("AI review running")
+	}
+	b := iconButton(c, iconMore, "More")
+	b.Menu(func(m *ui.Menu) {
+		if m.Item("Review with AI").Trailing("⌘⇧I").Disabled(len(w.files) == 0).Chosen() {
+			w.reviewWithAI()
+		}
+		m.Submenu("Group Files", func(m *ui.Menu) {
+			g := w.grouping()
+			for _, it := range []struct {
+				label string
+				mode  groupMode
+			}{{"Not at All", groupNone}, {"By Kind", groupKind}, {"By AI Review", groupAI}} {
+				if m.Item(it.label).Radio(g == it.mode).Chosen() {
+					w.chooseGrouping(it.mode)
+				}
+			}
+		})
+		m.Separator()
+		m.Submenu("Diff Layout", func(m *ui.Menu) {
+			for _, split := range []bool{true, false} {
+				label := map[bool]string{true: "Split", false: "Unified"}[split]
+				if m.Item(label).Radio(w.split() == split).Chosen() && split != w.split() {
+					toggleLayout()
+					w.settings.DiffStyle = map[bool]string{true: "split", false: "unified"}[split]
+					w.rowsDirty = true
+				}
+			}
+			m.Separator()
+			if m.Item("Word Wrap").Checked(w.settings.WordWrap).Trailing("⌥Z").Chosen() {
+				toggleWrap()
+			}
+			if m.Item("Show Whitespace").Checked(w.settings.ShowWhitespace).Chosen() {
+				cfg.Update(func(s *Settings) { s.ShowWhitespace = !s.ShowWhitespace })
+			}
+		})
+		if m.Item("Collapse All Files").Disabled(len(w.files) == 0).Chosen() {
+			w.setAllCollapsed(true)
+		}
+		if m.Item("Expand All Files").Disabled(len(w.files) == 0).Chosen() {
+			w.setAllCollapsed(false)
+		}
+		m.Separator()
+		if m.Item("Focus Mode").Checked(w.focus).Trailing("⌘⇧F").Chosen() {
+			w.toggleFocus()
+		}
+		if m.Item("Copy Review Comments").Trailing("⌘⇧M").Disabled(comments == 0).Chosen() {
+			w.copyComments()
+		}
 	})
 }
 
@@ -206,37 +268,6 @@ func chip(c *ui.Context, pal *palette, svg *ui.SVG, label string, color ui.Color
 		ui.Icon(c, svg).FontSize(12)
 		ui.Text(c, label).FontSize(12).FontWeight(600).SingleLine()
 	})
-}
-
-// layoutControl switches between split and unified diffs.
-func (w *window) layoutControl(c *ui.Context, pal *palette) {
-	t := c.Theme()
-	choice := 0
-	if !w.split() {
-		choice = 1
-	}
-	seg := ui.SegmentedBase(c, &choice, 2)
-	seg.Track.Padding(2).Gap(2).Radius(8).Background(ui.RGBA(127, 127, 127, 0.1)).Label("Diff layout").Children(func() {
-		for i, it := range []struct {
-			icon *ui.SVG
-			name string
-		}{{iconSplit, "Split"}, {iconUnified, "Unified"}} {
-			s := seg.Segment(i).Size(30, 24).Radius(6).Center().Label(it.name).Tooltip(it.name).TextColor(t.TextMuted)
-			if i == choice {
-				s.Background(pal.headerBg).Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.12)).TextColor(t.Text)
-			}
-			s.OnClick(func() {
-				split := i == 0
-				if split != w.split() {
-					toggleLayout()
-					w.settings.DiffStyle = map[bool]string{true: "split", false: "unified"}[split]
-					w.rowsDirty = true
-				}
-			})
-			s.Children(func() { ui.Icon(c, it.icon).FontSize(15) })
-		}
-	})
-
 }
 
 // mainArea shows the review, with the files pane left of it while there

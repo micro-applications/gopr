@@ -160,9 +160,14 @@ func TestReview(t *testing.T) {
 
 func TestUnified(t *testing.T) {
 	w, tt := newTestWindow(t, testRepo(t))
-	if err := tt.Click("Unified"); err != nil {
+	if err := tt.Click("More"); err != nil {
 		t.Fatal(err)
 	}
+	tt.Frame()
+	if err := tt.ChooseMenuItem("Diff Layout", "Unified"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
 	tt.Frame()
 	if w.split() {
 		t.Error("still split")
