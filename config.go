@@ -20,6 +20,11 @@ import (
 type Settings struct {
 	CodeFontFamily string `json:"codeFontFamily"`
 	CodeFontSize   int    `json:"codeFontSize"`
+	// UIFontFamily is the family of the window's text, the system's when
+	// empty; MarkdownFontFamily that of Markdown's (previews, descriptions,
+	// reviews and comments), the window's when empty.
+	UIFontFamily       string `json:"uiFontFamily"`
+	MarkdownFontFamily string `json:"markdownFontFamily"`
 	// CloneRoot is where pull requests' repositories are cloned, as
 	// <cloneRoot>/<owner>/<name>, and looked for, when not opened before.
 	CloneRoot           string `json:"cloneRoot"`
@@ -69,6 +74,8 @@ func defaultSettings() Settings {
 func (s *Settings) normalize() {
 	d := defaultSettings()
 	s.CodeFontFamily = strings.TrimSpace(s.CodeFontFamily)
+	s.UIFontFamily = strings.TrimSpace(s.UIFontFamily)
+	s.MarkdownFontFamily = strings.TrimSpace(s.MarkdownFontFamily)
 	s.CloneRoot = strings.TrimSpace(s.CloneRoot)
 	if s.CloneRoot == "" {
 		s.CloneRoot = d.CloneRoot

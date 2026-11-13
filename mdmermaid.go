@@ -14,9 +14,10 @@ import (
 // mermaidKey is what a diagram is drawn from: its source, the appearance
 // and the size of its labels.
 type mermaidKey struct {
-	src  string
-	dark bool
-	size float32
+	src    string
+	dark   bool
+	size   float32
+	family string
 }
 
 // mermaidDiagram is a Mermaid diagram of a preview: laid out, or why not.
@@ -27,6 +28,7 @@ type mermaidDiagram struct {
 	shapes  *ui.SVG
 	labels  []mermaidLabel
 	codeFam string
+	family  string // of the labels' text, the system's when empty
 	// scaled are the labels shaped at the scales drawn other than 1, by the
 	// scale in hundredths: glyphs scaled as images would blur.
 	scaled map[int][]mermaidLabel
@@ -56,8 +58,8 @@ type mermaidRun struct {
 const maxMermaid = 64
 
 // mermaidFont is the font a run of a label is measured and drawn in.
-func mermaidFont(size float64, weight int, italic, mono bool, codeFamily string) ui.Font {
-	f := ui.Font{Size: float32(size), Weight: weight, Italic: italic}
+func mermaidFont(size float64, weight int, italic, mono bool, codeFamily, family string) ui.Font {
+	f := ui.Font{Size: float32(size), Weight: weight, Italic: italic, Family: family}
 	if mono {
 		f.Family = codeFamily
 	}
@@ -79,6 +81,7 @@ func glyphsWidth(gs []ui.Glyph) float32 {
 type mainMeasurer struct {
 	run        func(func())
 	codeFamily string
+	family     string
 	mu         sync.Mutex
 	widths     map[measureKey]float64
 }
@@ -102,7 +105,7 @@ func (m *mainMeasurer) Width(text string, size float64, style mermaid.Style) flo
 		weight = 700
 	}
 	m.run(func() {
-		w = float64(glyphsWidth(ui.Shape(text, mermaidFont(size, weight, style&mermaid.Italic != 0, style&mermaid.Mono != 0, m.codeFamily))))
+		w = float64(glyphsWidth(ui.Shape(text, mermaidFont(size, weight, style&mermaid.Italic != 0, style&mermaid.Mono != 0, m.codeFamily, m.family))))
 	})
 	m.mu.Lock()
 	m.widths[k] = w
@@ -120,6 +123,15 @@ func (w *window) onMain(fn func()) {
 	mygo.RunOnMain(fn)
 }
 
+// markdownFamily is the family Markdown's text shows in: the settings'
+// for Markdown, else the window's.
+func (w *window) markdownFamily() string {
+	if w.settings.MarkdownFontFamily != "" {
+		return w.settings.MarkdownFontFamily
+	}
+	return w.settings.UIFontFamily
+}
+
 // mermaidBlock shows a Mermaid code block of a preview as its diagram:
 // its code until the diagram is laid out, and with why when it cannot be.
 func (w *window) mermaidBlock(c *ui.Context, b *markdown.CodeBlockView) {
@@ -128,7 +140,7 @@ func (w *window) mermaidBlock(c *ui.Context, b *markdown.CodeBlockView) {
 		return
 	}
 	t := c.Theme()
-	k := mermaidKey{src: b.Code(), dark: t.Dark, size: float32(w.settings.MarkdownFontSize)}
+	k := mermaidKey{src: b.Code(), dark: t.Dark, size: float32(w.settings.MarkdownFontSize), family: w.markdownFamily()}
 	m := w.mermaid[k]
 	if m == nil {
 		m = w.layOutMermaid(k)
@@ -153,13 +165,13 @@ func (w *window) layOutMermaid(k mermaidKey) *mermaidDiagram {
 		w.mermaid = map[mermaidKey]*mermaidDiagram{}
 	}
 	codeFamily := w.settings.CodeFontFamily
-	m := &mermaidDiagram{codeFam: codeFamily}
+	m := &mermaidDiagram{codeFam: codeFamily, family: k.family}
 	w.mermaid[k] = m
 	theme := mermaid.Light
 	if k.dark {
 		theme = mermaid.Dark
 	}
-	measure := &mainMeasurer{run: w.onMain, codeFamily: codeFamily, widths: map[measureKey]float64{}}
+	measure := &mainMeasurer{run: w.onMain, codeFamily: codeFamily, family: k.family, widths: map[measureKey]float64{}}
 	w.background(func() {
 		d, err := mermaid.Render(context.Background(), k.src, theme, measure, float64(k.size))
 		w.update(func() {
@@ -191,7 +203,7 @@ func (m *mermaidDiagram) shape(s float32) []mermaidLabel {
 	for _, l := range m.d.Labels {
 		ml := mermaidLabel{Label: l}
 		for _, r := range l.Runs {
-			gs := ui.Shape(r.Text, mermaidFont(r.Size*float64(s), r.Weight, r.Italic, r.Mono, m.codeFam))
+			gs := ui.Shape(r.Text, mermaidFont(r.Size*float64(s), r.Weight, r.Italic, r.Mono, m.codeFam, m.family))
 			color := ui.Hex(r.Fill)
 			if r.Opacity < 1 {
 				color = color.Alpha(float32(r.Opacity))

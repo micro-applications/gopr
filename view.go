@@ -11,6 +11,23 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
+// uiTheme gives the window the theme of the system with the text in the
+// settings' family, and returns it.
+func (w *window) uiTheme(c *ui.Context) *ui.Theme {
+	t := c.Theme()
+	family := w.settings.UIFontFamily
+	if family == "" || t.Font == family {
+		return t
+	}
+	if w.fontTheme == nil || w.fontThemeOf != t || w.fontTheme.Font != family {
+		ft := *t
+		ft.Font = family
+		w.fontTheme, w.fontThemeOf = &ft, t
+	}
+	c.SetTheme(w.fontTheme)
+	return w.fontTheme
+}
+
 func (w *window) view(c *ui.Context) {
 	if debugFrames {
 		start := time.Now()
@@ -25,7 +42,7 @@ func (w *window) view(c *ui.Context) {
 	}
 	// Everything shows as large as the zoom says, text and room alike.
 	c.SetZoom(float32(w.settings.Zoom))
-	t := c.Theme()
+	t := w.uiTheme(c)
 	pal := paletteFor(t)
 	w.now = c.Now()
 	if w.regroupPending {

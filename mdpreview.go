@@ -254,8 +254,8 @@ func (w *window) markdownColumn(c *ui.Context, f *fileState) {
 		}
 		col.Children(func() {
 			o := w.markdownOptions(f.Path)
-			if size := float32(w.settings.MarkdownFontSize); o.Theme == nil || o.Theme.FontSize != size {
-				o.Theme = markdownTheme(size)
+			if size, family := float32(w.settings.MarkdownFontSize), w.settings.MarkdownFontFamily; o.Theme == nil || o.Theme.FontSize != size || o.Theme.Font != family {
+				o.Theme = markdownTheme(size, family)
 			}
 			markdown.View(c, strings.Join(f.newLines, "\n"), o)
 		})
@@ -335,9 +335,11 @@ var (
 	}
 )
 
-// markdownTheme is the theme of previews whose text is size DIPs.
-func markdownTheme(size float32) *markdown.Theme {
+// markdownTheme is the theme of previews whose text is size DIPs, in
+// family, the window's when empty.
+func markdownTheme(size float32, family string) *markdown.Theme {
 	return &markdown.Theme{
+		Font:         family,
 		FontSize:     size,
 		LineHeight:   markdownLineHeight,
 		BlockSpacing: markdownBlockSpacing,

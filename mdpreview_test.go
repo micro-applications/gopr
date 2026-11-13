@@ -378,3 +378,37 @@ func TestMarkdownFontSize(t *testing.T) {
 		t.Errorf("size %d, want at most %d", got, maxMarkdownFontSize)
 	}
 }
+
+func TestFontFamilies(t *testing.T) {
+	w, tt := openedReadmePull(t, `[]`)
+	old := cfg.Get()
+	t.Cleanup(func() { cfg.Update(func(s *Settings) { *s = old }) })
+	off := cfg.OnChange(func(s Settings) { w.applySettings(s) })
+	t.Cleanup(off)
+	w.previewFile("README.md")
+	tt.Frame()
+	if w.fontTheme != nil {
+		t.Fatal("a font theme without a UI font family")
+	}
+	if f := w.markdownOptions("README.md").Theme.Font; f != "" {
+		t.Fatalf("preview font %q without a Markdown font family", f)
+	}
+
+	cfg.Update(func(s *Settings) { s.UIFontFamily, s.MarkdownFontFamily = " Courier New ", "Georgia" })
+	tt.Frame()
+	if w.fontTheme == nil || w.fontTheme.Font != "Courier New" {
+		t.Fatalf("window theme %+v, want the font Courier New", w.fontTheme)
+	}
+	if f := w.markdownOptions("README.md").Theme.Font; f != "Georgia" {
+		t.Errorf("preview font %q, want Georgia", f)
+	}
+	if f := w.markdownFamily(); f != "Georgia" {
+		t.Errorf("diagram font %q, want Georgia", f)
+	}
+
+	cfg.Update(func(s *Settings) { s.MarkdownFontFamily = "" })
+	tt.Frame()
+	if f := w.markdownFamily(); f != "Courier New" {
+		t.Errorf("diagram font %q without a Markdown font family, want the window's", f)
+	}
+}

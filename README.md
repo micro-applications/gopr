@@ -109,6 +109,8 @@ with codiff's names, and apply to open windows as the file changes:
 {
   "settings": {
     "codeFontFamily": "",          // e.g. "JetBrains Mono"; empty is SF Mono
+    "uiFontFamily": "",            // the window's text, e.g. "Inter"; empty is the system's
+    "markdownFontFamily": "",      // Markdown's text: previews, descriptions, reviews, comments and diagrams; empty is the window's
     "cloneRoot": "~/Projects",     // where pull requests' repositories are cloned: <cloneRoot>/<owner>/<name>
     "codeFontSize": 13,
     "copyCommentsOnClose": false,

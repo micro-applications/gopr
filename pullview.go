@@ -778,7 +778,7 @@ func (w *window) description(c *ui.Context, p *pullState, body string) {
 	if p.descOpts == nil {
 		p.descOpts = githubMarkdownOptions()
 	}
-	githubMarkdown(c, p.descOpts, body, float32(w.settings.MarkdownFontSize))
+	githubMarkdown(c, p.descOpts, body, float32(w.settings.MarkdownFontSize), w.settings.MarkdownFontFamily)
 }
 
 // commentMarkdown shows a review comment's Markdown, its options kept by
@@ -792,7 +792,7 @@ func (w *window) commentMarkdown(c *ui.Context, key, body string) {
 		o = githubMarkdownOptions()
 		w.ghMarkdown[key] = o
 	}
-	githubMarkdown(c, o, body, commentTextSize)
+	githubMarkdown(c, o, body, commentTextSize, w.settings.MarkdownFontFamily)
 }
 
 // commentTextSize is the size of review comments' text.
@@ -817,10 +817,10 @@ func githubMarkdownOptions() *markdown.Options {
 }
 
 // githubMarkdown shows Markdown from GitHub in the previews' type, its text
-// size DIPs.
-func githubMarkdown(c *ui.Context, o *markdown.Options, body string, size float32) {
-	if o.Theme == nil || o.Theme.FontSize != size {
-		o.Theme = markdownTheme(size)
+// size DIPs, in family.
+func githubMarkdown(c *ui.Context, o *markdown.Options, body string, size float32, family string) {
+	if o.Theme == nil || o.Theme.FontSize != size || o.Theme.Font != family {
+		o.Theme = markdownTheme(size, family)
 	}
 	markdown.View(c, body, o)
 }

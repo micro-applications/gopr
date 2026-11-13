@@ -52,6 +52,9 @@ type window struct {
 	launch   source // what the window was opened on
 	source   source
 	settings Settings
+	// fontTheme is the theme of fontThemeOf with the text in the settings' UI
+	// font family.
+	fontTheme, fontThemeOf *ui.Theme
 
 	branch  string
 	files   []*fileState
