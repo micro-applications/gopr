@@ -67,7 +67,7 @@ func TestFileTreeDirectoryDisclosureWaitsForRelease(t *testing.T) {
 	}
 }
 
-// The light sidebar is a solid shade under the panes beside it.
+// The light sidebar is a solid near white.
 func TestSidebarLight(t *testing.T) {
 	_, tt := newTestWindow(t, testRepo(t))
 	tt.Frame()
