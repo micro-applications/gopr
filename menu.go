@@ -52,21 +52,11 @@ func buildMenu() *mygo.Menu {
 			{Role: mygo.RoleQuit},
 		}},
 		{Label: "File", Submenu: []*mygo.MenuItem{
-			{Label: "Open Folder…", Accelerator: "CmdOrCtrl+O", Click: func(*mygo.MenuItem, *mygo.Window) { openFolder() }},
-			{Label: "Open Recent", Submenu: recentMenuItems()},
-			{Label: "Open Commit…", Accelerator: "CmdOrCtrl+Shift+C", Click: inWindow(func(w *window) { w.openDialog(dialogCommit) })},
-			{Label: "Open Branch…", Click: inWindow(func(w *window) { w.openDialog(dialogBranch) })},
-			{Label: "Open Pull Request…", Click: inWindow(func(w *window) { w.openDialog(dialogPull) })},
-			mygo.Separator(),
-			{Label: "Commit…", Accelerator: "CmdOrCtrl+Shift+Enter", Click: inWindow(func(w *window) {
-				if w.source.kind == sourceWorkingTree && !w.commitOpen && len(w.files) > 0 {
-					w.toggleCommit()
-				}
-			})},
+			{Label: "Open Pull Request…", Accelerator: "CmdOrCtrl+O", Click: inWindow(func(w *window) { w.openDialog(dialogPull) })},
 			mygo.Separator(),
 			{Label: "Open File in Editor", Accelerator: "CmdOrCtrl+Shift+O", Click: inWindow(func(w *window) { w.openCurrent() })},
 			mygo.Separator(),
-			{Role: mygo.RoleClose},
+			{Label: "Close", Accelerator: "CmdOrCtrl+W", Click: closeTabOrWindow},
 		}},
 		{Label: "Edit", Submenu: []*mygo.MenuItem{
 			{Role: mygo.RoleUndo},
@@ -77,7 +67,7 @@ func buildMenu() *mygo.Menu {
 			{Role: mygo.RolePaste},
 			{Role: mygo.RoleSelectAll},
 			mygo.Separator(),
-			{Label: "Find in Diffs", Accelerator: "CmdOrCtrl+F", Click: inWindow(func(w *window) { w.finding = true })},
+			{Label: "Find in Diffs", Accelerator: "CmdOrCtrl+F", Click: inWindow(func(w *window) { *w.findOpen() = true })},
 			{Label: "Filter Files", Accelerator: "CmdOrCtrl+P", Click: inWindow(func(w *window) { w.focusFilter() })},
 			mygo.Separator(),
 			{Label: "Copy Review Comments", Accelerator: "CmdOrCtrl+Shift+M", Click: inWindow(func(w *window) { w.copyComments() })},
@@ -85,9 +75,7 @@ func buildMenu() *mygo.Menu {
 		{Label: "View", Submenu: []*mygo.MenuItem{
 			{Label: "Command Bar…", Accelerator: "CmdOrCtrl+K", Click: inWindow(func(w *window) { w.paletteOpen = !w.paletteOpen })},
 			{Label: "Toggle Sidebar", Accelerator: "CmdOrCtrl+Shift+B", Click: inWindow(func(w *window) { w.toggleSidebar() })},
-			{Label: "Files", Accelerator: "CmdOrCtrl+1", Click: inWindow(func(w *window) { w.tab, w.sidebarShown = 0, true })},
-			{Label: "History", Accelerator: "CmdOrCtrl+2", Click: inWindow(func(w *window) { w.tab, w.sidebarShown = 1, true })},
-			{Label: "Pull Requests", Accelerator: "CmdOrCtrl+3", Click: inWindow(func(w *window) { w.showPulls() })},
+			{Label: "Focus Mode", Accelerator: "CmdOrCtrl+Shift+F", Click: inWindow(func(w *window) { w.toggleFocus() })},
 			mygo.Separator(),
 			{Label: "Review with AI", Accelerator: "CmdOrCtrl+Shift+I", Click: inWindow(func(w *window) { w.reviewWithAI() })},
 			{Label: "Group Files", Submenu: []*mygo.MenuItem{
@@ -113,10 +101,11 @@ func buildMenu() *mygo.Menu {
 				{Label: "Collapse All Files", Click: inWindow(func(w *window) { w.setAllCollapsed(true) })},
 				{Label: "Expand All Files", Click: inWindow(func(w *window) { w.setAllCollapsed(false) })},
 			}},
-			{Label: "Font Size", Submenu: []*mygo.MenuItem{
-				{Label: "Bigger", Accelerator: "CmdOrCtrl+=", Click: func(*mygo.MenuItem, *mygo.Window) { changeFontSize(1) }},
-				{Label: "Smaller", Accelerator: "CmdOrCtrl+-", Click: func(*mygo.MenuItem, *mygo.Window) { changeFontSize(-1) }},
-				{Label: "Actual Size", Accelerator: "CmdOrCtrl+0", Click: func(*mygo.MenuItem, *mygo.Window) { changeFontSize(0) }},
+			{Label: "Markdown Preview", Submenu: markdownWidthItems(s)},
+			{Label: "Zoom", Submenu: []*mygo.MenuItem{
+				{Label: "Zoom In", Accelerator: "CmdOrCtrl+=", Click: func(*mygo.MenuItem, *mygo.Window) { changeZoom(1) }},
+				{Label: "Zoom Out", Accelerator: "CmdOrCtrl+-", Click: func(*mygo.MenuItem, *mygo.Window) { changeZoom(-1) }},
+				{Label: "Actual Size", Accelerator: "CmdOrCtrl+0", Click: func(*mygo.MenuItem, *mygo.Window) { changeZoom(0) }},
 			}},
 			{Label: "Comments", Submenu: []*mygo.MenuItem{
 				{ID: "copyOnClose", Label: "Copy Comments on Close", Type: mygo.MenuItemCheckbox, Checked: s.CopyCommentsOnClose, Click: func(*mygo.MenuItem, *mygo.Window) {
@@ -129,16 +118,36 @@ func buildMenu() *mygo.Menu {
 				{ID: "theme-dark", Label: "Dark", Type: mygo.MenuItemRadio, Checked: s.Theme == "dark", Click: setTheme("dark")},
 			}},
 			mygo.Separator(),
-			{Label: "Refresh Changes", Accelerator: "CmdOrCtrl+R", Click: inWindow(func(w *window) { w.refresh() })},
+			{Label: "Refresh", Accelerator: "CmdOrCtrl+R", Click: inWindow(func(w *window) { w.refreshAll() })},
 			mygo.Separator(),
 			{Role: mygo.RoleToggleFullScreen},
 		}},
-		{Role: mygo.RoleWindowMenu},
+		{Role: mygo.RoleWindowMenu, Submenu: windowMenuItems()},
 		{Role: mygo.RoleHelp, Submenu: []*mygo.MenuItem{
 			{Label: "Keyboard Shortcuts", Click: inWindow(func(w *window) { w.help = true })},
 		}},
 	})
 	return appMenu
+}
+
+// closeTabOrWindow closes the file's tab shown, else the window.
+func closeTabOrWindow(_ *mygo.MenuItem, win *mygo.Window) {
+	w := focused(win)
+	switch {
+	case w != nil && w.activeTab > 0:
+		w.win.Update(func() { w.closeFileTab(w.activeTab) })
+	case win != nil:
+		win.Close()
+	}
+}
+
+// windowMenuItems are the items of the Window menu: MyGo's, apart from
+// the Close it has off macOS, which the File menu's Close does.
+func windowMenuItems() []*mygo.MenuItem {
+	if runtime.GOOS == "darwin" {
+		return nil
+	}
+	return []*mygo.MenuItem{{Role: mygo.RoleMinimize}}
 }
 
 // syncMenu shows the settings in the menu's check marks.
@@ -154,6 +163,9 @@ func syncMenu(s Settings) {
 	set("split", s.DiffStyle == "split")
 	set("unified", s.DiffStyle == "unified")
 	set("wrap", s.WordWrap)
+	for _, mw := range markdownWidths {
+		set("mdwidth-"+mw.key, s.MarkdownWidth == mw.key)
+	}
 	set("whitespace", s.ShowWhitespace)
 	set("copyOnClose", s.CopyCommentsOnClose)
 	set("theme-system", s.Theme == "system")
@@ -177,55 +189,6 @@ func applyTheme(s Settings) {
 	}
 }
 
-// openFolder asks for a repository and opens it.
-func openFolder() {
-	go func() {
-		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Title: "Open a Git Repository", Directory: true})
-		if err != nil || len(paths) == 0 {
-			return
-		}
-		if err := openWindow(paths[0], source{kind: sourceWorkingTree}); err != nil {
-			mygo.Dialog.Error("Could not open the folder", errorText(err))
-			return
-		}
-		closeWelcome()
-	}()
-}
-
-// recentMenuItems open the repositories opened lately, as File → Open
-// Recent.
-func recentMenuItems() []*mygo.MenuItem {
-	var items []*mygo.MenuItem
-	for _, root := range state.recent() {
-		items = append(items, &mygo.MenuItem{Label: abbreviateHome(root), ToolTip: root, Click: func(*mygo.MenuItem, *mygo.Window) {
-			go openRecent(root)
-		}})
-	}
-	if len(items) > 0 {
-		items = append(items, mygo.Separator())
-	}
-	return append(items, &mygo.MenuItem{Label: "Clear Menu", Disabled: len(items) == 0, Click: func(*mygo.MenuItem, *mygo.Window) {
-		state.clearRecent()
-		mygo.App.SetMenu(buildMenu())
-	}})
-}
-
-// openRecent opens a repository of File → Open Recent.
-func openRecent(root string) {
-	if err := openWindow(root, source{kind: sourceWorkingTree}); err != nil {
-		mygo.Dialog.Error("Could not open "+abbreviateHome(root), errorText(err))
-		return
-	}
-	closeWelcome()
-}
-
-// noteRecent puts a repository first in File → Open Recent.
-func noteRecent(root string) {
-	if state.addRecent(root) {
-		mygo.RunOnMain(func() { mygo.App.SetMenu(buildMenu()) })
-	}
-}
-
 // agentMenuItems choose the agent that reviews with AI.
 func agentMenuItems(s Settings) []*mygo.MenuItem {
 	choose := func(name string) func(*mygo.MenuItem, *mygo.Window) {
@@ -245,4 +208,18 @@ func agentMenuItems(s Settings) []*mygo.MenuItem {
 		items = append(items, &mygo.MenuItem{ID: "agent-" + a.Name, Label: a.Label, Type: mygo.MenuItemRadio, Checked: s.AIAgent == a.Name, Click: choose(a.Name)})
 	}
 	return items
+}
+
+// markdownWidthItems choose the width Markdown previews read at.
+func markdownWidthItems(s Settings) []*mygo.MenuItem {
+	var items []*mygo.MenuItem
+	for _, mw := range markdownWidths {
+		items = append(items, &mygo.MenuItem{ID: "mdwidth-" + mw.key, Label: mw.name, Type: mygo.MenuItemRadio, Checked: s.MarkdownWidth == mw.key,
+			Click: func(*mygo.MenuItem, *mygo.Window) { setMarkdownWidth(mw.key) }})
+	}
+	return append(items, mygo.Separator(),
+		&mygo.MenuItem{Label: "Bigger Text", Click: func(*mygo.MenuItem, *mygo.Window) { changeMarkdownFontSize(1) }},
+		&mygo.MenuItem{Label: "Smaller Text", Click: func(*mygo.MenuItem, *mygo.Window) { changeMarkdownFontSize(-1) }},
+		&mygo.MenuItem{Label: "Default Text Size", Click: func(*mygo.MenuItem, *mygo.Window) { changeMarkdownFontSize(0) }},
+	)
 }

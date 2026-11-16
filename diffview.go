@@ -79,9 +79,8 @@ func (w *window) diffList(c *ui.Context) {
 		w.updateMatches()
 		w.buildRows()
 	}
-	list := ui.List(c, &w.list, len(w.rows), func(i int) { w.diffRow(c, pal, i) }).
+	ui.List(c, &w.list, len(w.rows), func(i int) { w.diffRow(c, pal, i, w.list.FocusWithin(c)) }).
 		Grow(1).Padding(0, 12, 24).Background(pal.appBg).Label("Changes")
-	w.diffListEl = list
 
 	// The file at the top follows the scrolling, and the tree with it.
 	first, _ := w.list.Visible()
@@ -112,7 +111,7 @@ func (w *window) revealFile(i int) {
 	w.revealedAt = time.Now()
 }
 
-func (w *window) diffRow(c *ui.Context, pal *palette, i int) {
+func (w *window) diffRow(c *ui.Context, pal *palette, i int, focused bool) {
 	r := &w.rows[i]
 	switch r.kind {
 	case rowCommit:
@@ -135,7 +134,7 @@ func (w *window) diffRow(c *ui.Context, pal *palette, i int) {
 	case rowAINote:
 		w.noteRow(c, pal, r.note)
 	case rowHeader:
-		w.fileHeader(c, pal, int(r.file), f)
+		w.fileHeader(c, pal, int(r.file), f, focused)
 	case rowNote:
 		w.card(c, pal).Padding(10, 16).Background(pal.gapBg).Children(func() {
 			ui.Text(c, w.fileNote(f)).FontSize(12).TextColor(pal.gapText)
@@ -159,7 +158,7 @@ func (w *window) diffRow(c *ui.Context, pal *palette, i int) {
 }
 
 // card is a row inside a file's card, between its sides.
-func (w *window) card(c *ui.Context, pal *palette) *ui.Element {
+func (w *window) card(c *ui.Context, pal *palette) ui.Element {
 	return ui.Row(c).Background(pal.codeBg).BorderWidth(0, 1, 0, 1).BorderColor(pal.cardBorder)
 }
 
@@ -169,14 +168,14 @@ func (w *window) forceOpen(i int) bool {
 	return w.searching() && w.fileMatches[i]
 }
 
-func (w *window) fileHeader(c *ui.Context, pal *palette, idx int, f *fileState) {
+func (w *window) fileHeader(c *ui.Context, pal *palette, idx int, f *fileState, focused bool) {
 	t := c.Theme()
 	collapsed := f.collapsed && !w.forceOpen(idx)
 	viewed := w.isViewed(f)
 	// The band above the header spaces the cards, and hides the lines
 	// scrolling under it while it is pinned.
 	band := ui.Column(c).Padding(12, 0, 0, 0).Background(pal.appBg)
-	var h *ui.Element
+	var h ui.Element
 	band.Children(func() {
 		h = ui.Row(c).Height(46).Padding(0, 8, 0, 6).Gap(8).Background(pal.headerBg).Border(1, pal.cardBorder)
 	})
@@ -185,7 +184,7 @@ func (w *window) fileHeader(c *ui.Context, pal *palette, idx int, f *fileState) 
 	} else {
 		h.Radius(cardRadius, cardRadius, 0, 0)
 	}
-	if idx == w.current && w.diffListEl != nil && w.diffListEl.FocusWithin() {
+	if idx == w.current && focused {
 		h.Border(1, t.Accent.Alpha(0.6))
 	}
 	h.ContextMenu(func(m *ui.Menu) {
@@ -194,6 +193,9 @@ func (w *window) fileHeader(c *ui.Context, pal *palette, idx int, f *fileState) 
 		}
 		if m.Item("Copy Path").Chosen() {
 			c.WriteClipboard(f.Path)
+		}
+		if canViewFull(f) && m.Item("View Full File").Chosen() {
+			w.openFileTab(f.Path, 0)
 		}
 		if m.Item("Viewed").Checked(viewed).Chosen() {
 			w.setViewed(f, !viewed)
@@ -253,6 +255,9 @@ func (w *window) fileHeader(c *ui.Context, pal *palette, idx int, f *fileState) 
 			c.WriteClipboard(f.Path)
 			c.Toast("Copied " + f.Name())
 		}
+		if canViewFull(f) && iconButton(c, iconFile, "View Full File").Clicked() {
+			w.openFileTab(f.Path, 0)
+		}
 		open := iconButton(c, iconOpen, "Open file in editor").Disabled(f.Status == diff.Deleted || f.Directory)
 		if f.Status == diff.Deleted {
 			open.Tooltip("Deleted files cannot be opened")
@@ -263,8 +268,8 @@ func (w *window) fileHeader(c *ui.Context, pal *palette, idx int, f *fileState) 
 		if countable(f) && (f.Additions > 0 || f.Deletions > 0) {
 			ui.Row(c).Gap(8).Padding(4, 9).Radius(14).Background(pal.pill).Shrink(0).
 				Tooltip(lines(f.Additions, "added") + ", " + lines(f.Deletions, "removed")).Children(func() {
-				ui.Text(c, "+"+thousands(f.Additions)).Font(w.codeFont()).FontSize(12).FontWeight(600).TextColor(pal.addText)
-				ui.Text(c, "-"+thousands(f.Deletions)).Font(w.codeFont()).FontSize(12).FontWeight(600).TextColor(pal.delText)
+				ui.Text(c, "+"+thousands(f.Additions)).FontFeatures("tnum").FontSize(12).FontWeight(500).TextColor(pal.addText)
+				ui.Text(c, "−"+thousands(f.Deletions)).FontFeatures("tnum").FontSize(12).FontWeight(500).TextColor(pal.delText)
 			})
 		}
 		if f.Generated {
@@ -275,8 +280,13 @@ func (w *window) fileHeader(c *ui.Context, pal *palette, idx int, f *fileState) 
 			ui.Row(c).Gap(4).Padding(4, 9).Radius(14).Background(pal.pill).TextColor(t.TextMuted).Shrink(0).
 				Tooltip(plural(n, "unresolved thread")).Children(func() {
 				ui.Icon(c, iconComment).FontSize(12)
-				ui.Text(c, itoa(n)).Font(w.codeFont()).FontSize(12).FontWeight(600)
+				ui.Text(c, itoa(n)).FontFeatures("tnum").FontSize(12).FontWeight(500)
 			})
+		}
+		if canPreview(f) {
+			if ui.Button(c, "Preview").Height(24).Shrink(0).Tooltip("Preview " + f.Name() + " in a tab").Clicked() {
+				w.previewFile(f.Path)
+			}
 		}
 		w.viewedButton(c, pal, f, viewed)
 	})
@@ -288,9 +298,7 @@ func (w *window) viewedButton(c *ui.Context, pal *palette, f *fileState, viewed 
 	on := viewed
 	b := ui.CheckboxBase(c, &on).Gap(7).Height(30).Padding(0, 11).Radius(14).Shrink(0).
 		Border(1, ui.RGBA(127, 127, 127, 0.22)).Label("Viewed")
-	if b.Changed() {
-		w.setViewed(f, on)
-	}
+	b.OnClick(func() { w.setViewed(f, on) })
 	if b.Hovered() {
 		b.Background(pal.hover)
 	}
@@ -494,16 +502,19 @@ func (w *window) lineRow(c *ui.Context, pal *palette, f *fileState, r *row) {
 	e := w.card(c, pal).AlignItems(ui.Stretch).MinHeight(lh)
 	hs := w.hscroll[f.Path]
 	if !w.settings.WordWrap {
+		handle := ui.Local(e, "input-handle", func() ui.Handle { return ui.Handle{} })
+		e.Bind(handle)
+		charWidth := w.charWidth(c)
 		e.HandleInput(func(ev ui.InputEvent) bool {
 			if ev.Kind != ui.InputScroll || math.Abs(float64(ev.DX)) <= math.Abs(float64(ev.DY)) {
 				return false
 			}
-			b := e.Bounds()
+			b := handle.Bounds(c)
 			code := b.W - 2*gutter - 40
 			if w.splitFile(f) {
 				code = b.W/2 - gutter - 30
 			}
-			limit := max(float32(f.metrics().maxCols)*w.charWidth(c)-code, 0)
+			limit := max(float32(f.metrics().maxCols)*charWidth-code, 0)
 			w.hscroll[f.Path] = min(max(w.hscroll[f.Path]+ev.DX, 0), limit)
 			w.invalidate()
 			return true

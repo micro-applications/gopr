@@ -10,132 +10,78 @@ import (
 	"time"
 
 	"github.com/egoist/godiff/internal/github"
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/markdown"
 )
 
-// pullsView lists the open pull requests of the repository's remote on
-// GitHub, in the sidebar.
-func (w *window) pullsView(c *ui.Context) {
+// pullRow is a pull request as a list shows it: its title, its
+// repository when given, as acme/api, its number, author and age, and how
+// its review and checks stand. current is the pull request shown, selected
+// that one while its list has the focus. The caller handles its clicks.
+func pullRow(c *ui.Context, w *window, pal *palette, p *github.Summary, repo string, author, current, selected bool) ui.Element {
 	t := c.Theme()
-	pal := paletteFor(t)
-	if !w.pullsLoaded && !w.pullsLoading {
-		w.loadPulls()
+	row := ui.Row(c).Gap(8).Padding(6, 8).Radius(6).AlignItems(ui.Start).Role(ui.RoleButton).Label(p.Title)
+	muted, ref := t.TextMuted, pal.ref
+	switch {
+	case selected:
+		row.Background(t.Accent).TextColor(t.AccentText)
+		muted, ref = t.AccentText.Alpha(0.75), t.AccentText
+	case current:
+		row.Background(ui.RGBA(127, 127, 127, 0.2))
+	case row.Hovered():
+		row.Background(ui.RGBA(127, 127, 127, 0.08))
 	}
-	q := strings.ToLower(strings.TrimSpace(w.pullsFilter))
-	var list []*github.Summary
-	for i := range w.pulls {
-		p := &w.pulls[i]
-		if q == "" || strings.Contains(strings.ToLower(p.Title), q) || strings.Contains(strings.ToLower(p.Author.Login), q) ||
-			strings.TrimPrefix(q, "#") == itoa(p.Number) || strings.Contains(strings.ToLower(p.HeadRef), q) {
-			list = append(list, p)
-		}
+	name := fmt.Sprintf("#%d", p.Number)
+	if repo != "" {
+		name = repo + name
 	}
-	ui.Row(c).Padding(0, 10, 4, 14).Gap(6).Children(func() {
-		label := "Open on " + w.gh.repo.String()
-		if w.pullsLoaded && w.pullsErr == nil {
-			label = fmt.Sprintf("%d open on %s", len(w.pulls), w.gh.repo)
+	row.Tooltip(fmt.Sprintf("%s %s\n%s wants to merge %s", name, p.Title, p.Author.Login, p.HeadRef))
+	row.Children(func() {
+		icon, color := iconPull, pal.addBar
+		if p.Draft {
+			icon, color = iconPullDraft, t.TextMuted
 		}
-		ui.Text(c, label).FontSize(11).FontWeight(600).TextColor(t.TextMuted).SingleLine().Grow(1).Shrink(1).MinWidth(0)
-		if w.pullsLoading {
-			ui.Spinner(c).Size(12, 12)
+		if selected {
+			color = t.AccentText
 		}
-		if iconButton(c, iconRefresh, "Refresh pull requests").Size(22, 22).Clicked() {
-			w.loadPulls()
-		}
-	})
-	if len(list) == 0 {
-		ui.Column(c).Grow(1).Center().Padding(16).Gap(8).Children(func() {
-			switch {
-			case w.pullsErr != nil:
-				ui.Text(c, errorText(w.pullsErr)).FontSize(12).TextColor(t.TextMuted).TextAlign(ui.Center)
-				if ui.Button(c, "Try Again").Clicked() {
-					w.loadPulls()
+		ui.Icon(c, icon).FontSize(14).TextColor(color).Margin(1, 0, 0).Shrink(0)
+		ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
+			ui.Text(c, p.Title).FontSize(12).FontWeight(500).MaxLines(2)
+			// The repository by its name alone (the tooltip has its owner),
+			// the author unless it is the viewer, and how long ago.
+			ui.Row(c).Gap(4).Children(func() {
+				dot := func() { ui.Text(c, "·").FontSize(10).TextColor(muted).Shrink(0) }
+				if repo != "" {
+					name := repo
+					if i := strings.LastIndexByte(repo, '/'); i >= 0 {
+						name = repo[i+1:]
+					}
+					ui.Text(c, name).FontSize(10).TextColor(muted).SingleLine().Shrink(1).MinWidth(0)
 				}
-			case !w.pullsLoaded:
-				ui.Text(c, "Loading pull requests…").FontSize(12).TextColor(t.TextMuted)
-			case q != "":
-				ui.Text(c, "No matching pull requests").FontSize(12).TextColor(t.TextMuted)
-			default:
-				ui.Text(c, "No open pull requests").FontSize(12).TextColor(t.TextMuted)
-			}
-			if ui.Button(c, "Open Pull Request…").Clicked() {
-				w.openDialog(dialogPull)
-			}
-		})
-		return
-	}
-	current := -1
-	for i, p := range list {
-		if w.source == pullSource(w.gh.repo, p.Number) {
-			current = i
-		}
-	}
-	open := func(i int) {
-		if i < 0 || i >= len(list) {
-			return
-		}
-		w.commitOpen = false
-		w.pullsList.ScrollIntoView(i)
-		w.setSource(pullSource(w.gh.repo, list[i].Number))
-	}
-	w.pullsList.Key = func(i int) any { return list[i].Number }
-	w.pullsList.Label = func(i int) string { return list[i].Title }
-	focused := w.pullsEl != nil && w.pullsEl.FocusWithin()
-	l := ui.List(c, &w.pullsList, len(list), func(i int) {
-		p := list[i]
-		row := ui.Row(c).Gap(8).Padding(6, 8).Radius(6).AlignItems(ui.Start).Role(ui.RoleButton).Label(p.Title)
-		muted, ref := t.TextMuted, pal.ref
-		selected := i == current && focused
-		switch {
-		case selected:
-			row.Background(t.Accent).TextColor(t.AccentText)
-			muted, ref = t.AccentText.Alpha(0.75), t.AccentText
-		case i == current:
-			row.Background(ui.RGBA(127, 127, 127, 0.2))
-		case row.Hovered():
-			row.Background(ui.RGBA(127, 127, 127, 0.08))
-		}
-		if row.Clicked() {
-			open(i)
-		}
-		row.Tooltip(fmt.Sprintf("#%d %s\n%s wants to merge %s", p.Number, p.Title, p.Author.Login, p.HeadRef))
-		row.Children(func() {
-			icon, color := iconPull, pal.addBar
-			if p.Draft {
-				icon, color = iconPullDraft, t.TextMuted
-			}
-			if selected {
-				color = t.AccentText
-			}
-			ui.Icon(c, icon).FontSize(14).TextColor(color).Margin(1, 0, 0).Shrink(0)
-			ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
-				ui.Text(c, p.Title).FontSize(12).FontWeight(500).MaxLines(2)
-				ui.Row(c).Gap(5).Children(func() {
-					ui.Textf(c, "#%d", p.Number).Font(w.codeFont()).FontSize(10).TextColor(ref).Shrink(0)
+				ui.Textf(c, "#%d", p.Number).FontSize(10).TextColor(ref).Shrink(0)
+				if author {
+					dot()
 					ui.Text(c, p.Author.Login).FontSize(10).TextColor(muted).SingleLine().Shrink(1).MinWidth(0)
-					ui.Text(c, relativeTime(w.now, p.UpdatedAt)).FontSize(10).TextColor(muted).Shrink(0)
-					ui.Spacer(c)
-					switch p.ReviewDecision {
-					case "approved":
-						ui.Icon(c, iconCheck).FontSize(12).TextColor(pickColor(selected, t.AccentText, pal.addBar)).Tooltip("Approved").Shrink(0)
-					case "changes_requested":
-						ui.Icon(c, iconXCircle).FontSize(12).TextColor(pickColor(selected, t.AccentText, t.Danger)).Tooltip("Changes requested").Shrink(0)
-					}
-					if p.Checks != "" {
-						color := map[string]ui.Color{"success": pal.addBar, "failure": t.Danger, "pending": ui.Hex("#d4a72c")}[p.Checks]
-						ui.Box(c).Size(7, 7).Radius(4).Background(color).Tooltip("Checks: " + p.Checks).Shrink(0)
-					}
-				})
+				}
+				dot()
+				ui.Text(c, relativeTime(w.now, p.UpdatedAt)).FontSize(10).TextColor(muted).Shrink(0)
+				ui.Spacer(c)
+				switch p.ReviewDecision {
+				case "approved":
+					ui.Icon(c, iconCheck).FontSize(12).TextColor(pickColor(selected, t.AccentText, pal.addBar)).Tooltip("Approved").Shrink(0)
+				case "changes_requested":
+					ui.Icon(c, iconXCircle).FontSize(12).TextColor(pickColor(selected, t.AccentText, t.Danger)).Tooltip("Changes requested").Shrink(0)
+				}
+				// Passing checks are the usual case: a dot marks the others.
+				if p.Checks != "" && p.Checks != "success" {
+					color := map[string]ui.Color{"success": pal.addBar, "failure": t.Danger, "pending": ui.Hex("#d4a72c")}[p.Checks]
+					ui.Box(c).Size(7, 7).Radius(4).Background(color).Label("Checks: " + p.Checks).Tooltip("Checks: " + p.Checks).Shrink(0)
+				}
 			})
 		})
-	}).Grow(1).Padding(2, 8).Gap(1).Focusable().FocusRing(false).Label("Pull requests")
-	w.pullsEl = l
-	if l.Shortcut(0, ui.KeyDown) {
-		open(current + 1)
-	}
-	if l.Shortcut(0, ui.KeyUp) {
-		open(max(current-1, 0))
-	}
+	})
+	return row
 }
 
 // ago is " · 3d ago", "" for no time.
@@ -155,7 +101,7 @@ func pickColor(on bool, a, b ui.Color) ui.Color {
 
 // stateBadge is the pull request's state as GitHub shows it: Open,
 // Draft, Merged or Closed.
-func stateBadge(c *ui.Context, pal *palette, m *github.PullRequest) *ui.Element {
+func stateBadge(c *ui.Context, pal *palette, m *github.PullRequest) ui.Element {
 	t := c.Theme()
 	status := m.Status()
 	icon, color := iconPull, pal.addBar
@@ -187,13 +133,14 @@ func plainBody(s string) string {
 
 // pullHeader shows the pull request reviewed: its state, title, branches,
 // description and reviews.
-func (w *window) pullHeader(c *ui.Context, pal *palette) *ui.Element {
+func (w *window) pullHeader(c *ui.Context, pal *palette) ui.Element {
 	t := c.Theme()
 	p := w.pr
 	m := p.meta
-	return ui.Column(c).Padding(14, 16).Gap(10).Radius(cardRadius).Background(pal.headerBg).Border(1, pal.cardBorder).Children(func() {
+	return ui.Column(c).Padding(14, 16).Gap(10).Radius(cardRadius).Background(pal.headerBg).Children(func() {
 		ui.Row(c).Gap(10).AlignItems(ui.Start).Children(func() {
 			stateBadge(c, pal, m)
+			w.stackSwitcher(c, pal)
 			ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
 				ui.RichText(c,
 					ui.Span{Text: m.Title, Weight: 700},
@@ -228,7 +175,7 @@ func (w *window) pullHeader(c *ui.Context, pal *palette) *ui.Element {
 				ui.Span{Text: "+" + thousands(m.Additions), Color: pal.addText},
 				ui.Span{Text: " −" + thousands(m.Deletions), Color: pal.delText},
 				ui.Span{Text: " · " + plural(m.ChangedFiles, "file"), Color: t.TextMuted},
-			).Font(w.codeFont()).FontSize(12).FontWeight(600)
+			).FontFeatures("tnum").FontSize(12).FontWeight(600)
 			if r := p.reviews; r != nil && len(r.Threads) > 0 {
 				open := 0
 				for _, th := range r.Threads {
@@ -244,11 +191,28 @@ func (w *window) pullHeader(c *ui.Context, pal *palette) *ui.Element {
 		})
 		if body := plainBody(m.Body); body != "" {
 			ui.Column(c).Gap(4).Children(func() {
-				text := ui.Text(c, body).FontSize(13).Selectable().TextColor(t.Text.Alpha(0.88))
-				long := strings.Count(body, "\n") > 6 || len(body) > 600
-				if long && !p.descOpen {
-					text.MaxLines(6)
+				// Long once laid out taller than it shows collapsed, and
+				// some: a little more shows whole.
+				long := p.descHeight > descCollapsed+48
+				desc := ui.Column(c).Label("Pull request description")
+				// Read at the previews' width, as a document is.
+				if mw := w.markdownMax(); mw > 0 {
+					desc.MaxWidth(mw)
 				}
+				if long && !p.descOpen {
+					// It fades out where it is cut.
+					desc.MaxHeight(descCollapsed).ClipY().DrawOver(func(pt *ui.Painter, r ui.Rect) {
+						fade := ui.Rect{X: r.X, Y: r.Y + r.H - 36, W: r.W, H: 36}
+						pt.FillGradient(fade, ui.LinearGradient{From: pal.headerBg.Alpha(0), To: pal.headerBg, Angle: 180}, 0)
+					})
+				}
+				desc.Children(func() {
+					inner := ui.Column(c).Shrink(0).Children(func() { w.description(c, p, body) })
+					if h := inner.Bounds().H; h > 0 && h != p.descHeight {
+						p.descHeight = h
+						c.After(0)
+					}
+				})
 				if long {
 					label := "Show more"
 					if p.descOpen {
@@ -264,7 +228,11 @@ func (w *window) pullHeader(c *ui.Context, pal *palette) *ui.Element {
 			})
 		}
 		if r := p.reviews; r != nil && len(r.Summaries) > 0 {
-			ui.Column(c).Gap(8).Padding(10, 0, 0).BorderWidth(1, 0, 0, 0).BorderColor(pal.cardBorder).Children(func() {
+			reviews := ui.Column(c).Gap(8).Padding(10, 0, 0).BorderWidth(1, 0, 0, 0).BorderColor(pal.cardBorder)
+			if mw := w.markdownMax(); mw > 0 {
+				reviews.MaxWidth(mw + 44)
+			}
+			reviews.Children(func() {
 				for _, s := range r.Summaries {
 					w.reviewSummary(c, pal, s)
 				}
@@ -315,7 +283,9 @@ func (w *window) reviewSummary(c *ui.Context, pal *palette, s github.ReviewSumma
 			).FontSize(12)
 		})
 		if body := plainBody(s.Body); body != "" {
-			ui.Text(c, body).FontSize(13).Selectable().Padding(0, 0, 0, 44).TextColor(t.Text.Alpha(0.88))
+			ui.Column(c).Padding(0, 0, 0, 44).Label("Review").Children(func() {
+				w.commentMarkdown(c, "review\x00"+body, body)
+			})
 		}
 	})
 }
@@ -442,7 +412,7 @@ func (w *window) threadComment(c *ui.Context, pal *palette, th *github.Thread, c
 	t := c.Theme()
 	p := w.pr
 	own := p.viewer != "" && cm.Author.Login == p.viewer && p.canWrite()
-	ui.Row(c).Key(cm.ID).Gap(10).Padding(10, 12).AlignItems(ui.Start).Children(func() {
+	ui.Row(c.Key(cm.ID)).Gap(10).Padding(10, 12).AlignItems(ui.Start).Children(func() {
 		avatar(c, cm.Author, 24)
 		ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
 			ui.Row(c).Gap(6).Children(func() {
@@ -497,7 +467,11 @@ func (w *window) threadComment(c *ui.Context, pal *palette, th *github.Thread, c
 				})
 				return
 			}
-			ui.Text(c, plainBody(cm.Body)).FontSize(13).Selectable()
+			if body := plainBody(cm.Body); body != "" {
+				ui.Column(c).Label("Comment").Children(func() {
+					w.commentMarkdown(c, "comment\x00"+body, body)
+				})
+			}
 		})
 	})
 }
@@ -749,7 +723,7 @@ var avatars struct {
 var fetchAvatars bool
 
 // avatar shows a user's picture, their initials until it comes.
-func avatar(c *ui.Context, u github.User, size float32) *ui.Element {
+func avatar(c *ui.Context, u github.User, size float32) ui.Element {
 	img := avatarImage(u)
 	if img == nil {
 		return ui.Avatar(c, u.Login, nil).Size(size, size).Tooltip(u.Login)
@@ -811,4 +785,83 @@ func avatarImage(u github.User) *ui.Bitmap {
 		}
 	}()
 	return nil
+}
+
+// openExternal opens a link in the browser: tests set it.
+var openExternal = func(url string) { go mygo.Shell.OpenExternal(url) }
+
+// descCollapsed is how tall a long description shows until Show more.
+const descCollapsed = 180
+
+// description shows a pull request's description as its Markdown reads,
+// in the previews' type.
+func (w *window) description(c *ui.Context, p *pullState, body string) {
+	if p.descOpts == nil {
+		p.descOpts = githubMarkdownOptions()
+	}
+	githubMarkdown(c, p.descOpts, body, float32(w.settings.MarkdownFontSize), w.settings.MarkdownFontFamily)
+}
+
+// commentMarkdown shows a review comment's Markdown, its options kept by
+// key for the frames after.
+func (w *window) commentMarkdown(c *ui.Context, key, body string) {
+	o := w.ghMarkdown[key]
+	if o == nil {
+		if w.ghMarkdown == nil || len(w.ghMarkdown) >= 512 {
+			w.ghMarkdown = map[string]*markdown.Options{}
+		}
+		o = githubMarkdownOptions()
+		w.ghMarkdown[key] = o
+	}
+	githubMarkdown(c, o, body, commentTextSize, w.settings.MarkdownFontFamily)
+}
+
+// commentTextSize is the size of review comments' text.
+const commentTextSize = 13
+
+// githubMarkdownOptions are the options of Markdown from GitHub: links open
+// in the browser; its pictures, which GitHub keeps behind the user's
+// sign-in, show as their descriptions, and its HTML as its text.
+func githubMarkdownOptions() *markdown.Options {
+	return &markdown.Options{
+		OnLink: func(url string) {
+			if strings.HasPrefix(url, "https://") || strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "mailto:") {
+				openExternal(url)
+			}
+		},
+		HTML: func(c *ui.Context, html string) {
+			if text := htmlText(html); text != "" {
+				ui.Text(c, text).TextColor(c.Theme().TextMuted).Selectable()
+			}
+		},
+	}
+}
+
+// githubMarkdown shows Markdown from GitHub in the previews' type, its text
+// size DIPs, in family.
+func githubMarkdown(c *ui.Context, o *markdown.Options, body string, size float32, family string) {
+	if o.Theme == nil || o.Theme.FontSize != size || o.Theme.Font != family {
+		o.Theme = markdownTheme(size, family)
+	}
+	markdown.View(c, body, o)
+}
+
+var (
+	htmlTag   = regexp.MustCompile(`(?s)<[^>]*>`)
+	htmlAlt   = regexp.MustCompile(`(?i)<img\b[^>]*\balt="([^"]*)"[^>]*>`)
+	htmlSpace = regexp.MustCompile(`[ \t]+`)
+)
+
+// htmlText is the text of an HTML block of a description: its tags left
+// out, a picture as its description.
+func htmlText(html string) string {
+	html = htmlAlt.ReplaceAllString(html, "[$1]")
+	html = htmlTag.ReplaceAllString(html, "")
+	var lines []string
+	for _, l := range strings.Split(html, "\n") {
+		if l = strings.TrimSpace(htmlSpace.ReplaceAllString(l, " ")); l != "" {
+			lines = append(lines, l)
+		}
+	}
+	return strings.Join(lines, "\n")
 }

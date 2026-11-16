@@ -95,6 +95,9 @@ type savedAnalysis struct {
 
 // loadAnalysis reads the review saved of a source, once.
 func (w *window) loadAnalysis(src source) {
+	if w.repo == nil {
+		return
+	}
 	st := w.analysisFor(src)
 	if st.checked {
 		return
@@ -146,7 +149,8 @@ func (w *window) runAnalysis() {
 	if st.running || len(w.files) == 0 || w.loading {
 		return
 	}
-	req := agent.Request{Dir: w.repo.Root, Model: w.settings.AIModel}
+	repo := w.repo
+	req := agent.Request{Dir: repo.Root, Model: w.settings.AIModel}
 	var base, head string
 	switch src.kind {
 	case sourceWorkingTree:
@@ -200,7 +204,7 @@ func (w *window) runAnalysis() {
 		// The files' descriptions read no state the main thread changes.
 		req.Files = analysisFiles(files)
 		if base != "" && head != "" {
-			req.Commits = w.repo.Subjects(base, head, 100)
+			req.Commits = repo.Subjects(base, head, 100)
 		}
 		last := ""
 		an, err := runAgent(ctx, a, req, func(s string) {
@@ -258,7 +262,7 @@ func (w *window) changedSince(st *analysisState) int {
 
 // summaryCard shows the agent's review of the changes: its summary, or
 // what it does while at work.
-func (w *window) summaryCard(c *ui.Context, pal *palette) *ui.Element {
+func (w *window) summaryCard(c *ui.Context, pal *palette) ui.Element {
 	t := c.Theme()
 	st := w.analyses[w.source]
 	return ui.Column(c).Padding(12, 16).Gap(8).Radius(cardRadius).Background(pal.headerBg).Border(1, t.Accent.Alpha(0.3)).Children(func() {
@@ -331,7 +335,7 @@ func (w *window) summaryCard(c *ui.Context, pal *palette) *ui.Element {
 				}
 				ui.Text(c, who+": "+st.progress).FontSize(12).TextColor(t.TextMuted).SingleLine().Grow(1).Shrink(1).MinWidth(0)
 				elapsed := w.now.Sub(st.started).Truncate(time.Second)
-				ui.Text(c, elapsed.String()).Font(w.codeFont()).FontSize(11).TextColor(t.TextMuted).Shrink(0)
+				ui.Text(c, elapsed.String()).FontFeatures("tnum").FontSize(11).TextColor(t.TextMuted).Shrink(0)
 				c.After(time.Second)
 			})
 		}
@@ -479,7 +483,7 @@ func (w *window) reviewAgent() (agent.Agent, bool) {
 // lists.
 func (w *window) modelMenu(c *ui.Context) {
 	a, ok := w.reviewAgent()
-	if !ok {
+	if !ok || w.repo == nil {
 		return
 	}
 	list := modelsOf(a, w.repo.Root)
@@ -671,42 +675,6 @@ func installedAgents() ([]agent.Agent, bool) {
 		}()
 	}
 	return agentsFound.list, agentsFound.done
-}
-
-// groupControl chooses how the files group: not at all, by kind, or by
-// the agent's review, which it asks for when there is none.
-func (w *window) groupControl(c *ui.Context, pal *palette) {
-	t := c.Theme()
-	modes := []groupMode{groupNone, groupKind, groupAI}
-	current := slices.Index(modes, w.grouping())
-	st := w.analyses[w.source]
-	running := st != nil && st.running
-	choice := current
-	seg := ui.SegmentedBase(c, &choice, len(modes))
-	seg.Track.Padding(2).Gap(2).Radius(8).Background(ui.RGBA(127, 127, 127, 0.1)).Label("Group files").Children(func() {
-		for i, it := range []struct {
-			icon *ui.SVG
-			name string
-		}{{iconList, "No groups"}, {iconLayers, "Group by kind"}, {iconSparkle, "Group by an AI review"}} {
-			s := seg.Segment(i).Size(30, 24).Radius(6).Center().Label(it.name).Tooltip(it.name).TextColor(t.TextMuted)
-			if i == current {
-				s.Background(pal.headerBg).Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.12)).TextColor(t.Text)
-			}
-			s.Children(func() {
-				if i == 2 && running {
-					// A review under way. A spinner is painted again, as
-					// the card's, where an animation of the icon would
-					// build the window again at every frame.
-					ui.Spinner(c).Size(14, 14)
-					return
-				}
-				ui.Icon(c, it.icon).FontSize(15)
-			})
-		}
-	})
-	if choice != current {
-		w.chooseGrouping(modes[choice])
-	}
 }
 
 // chooseGrouping groups the files as the user chose. Grouping by an AI

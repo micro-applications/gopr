@@ -10,24 +10,8 @@ import (
 	"github.com/egoist/mygo"
 )
 
-// takeCwd takes the --cwd option out of a command line: the directory the
-// godiff command ran in, which `open` does not pass on.
-func takeCwd(args []string, wd string) ([]string, string) {
-	out := make([]string, 0, len(args))
-	for i := 0; i < len(args); i++ {
-		if args[i] == "--cwd" && i+1 < len(args) {
-			wd = args[i+1]
-			i++
-			continue
-		}
-		if v, ok := strings.CutPrefix(args[i], "--cwd="); ok {
-			wd = v
-			continue
-		}
-		out = append(out, args[i])
-	}
-	return out, wd
-}
+// cliName is the command that opens the app.
+const cliName = "gopr"
 
 // appBundle returns the .app holding the running executable, "" outside
 // one.
@@ -44,17 +28,17 @@ func appBundle() string {
 	return ""
 }
 
-// cliScript is the godiff command: it opens the app on the repository it
-// runs in, as codiff's terminal helper does.
+// cliScript is the gopr command: it opens the app, or a pull request in
+// it.
 func cliScript() string {
 	if bundle := appBundle(); bundle != "" && runtime.GOOS == "darwin" {
-		return fmt.Sprintf("#!/bin/sh\n# Reviews the changes of the Git repository here with Godiff.\nexec open -n -a %q --args --cwd \"$PWD\" \"$@\"\n", bundle)
+		return fmt.Sprintf("#!/bin/sh\n# Opens GoPR, or a pull request in it.\nexec open -n -a %q --args \"$@\"\n", bundle)
 	}
 	exe, _ := os.Executable()
-	return fmt.Sprintf("#!/bin/sh\n# Reviews the changes of the Git repository here with Godiff.\n%q --cwd \"$PWD\" \"$@\" >/dev/null 2>&1 &\n", exe)
+	return fmt.Sprintf("#!/bin/sh\n# Opens GoPR, or a pull request in it.\n%q \"$@\" >/dev/null 2>&1 &\n", exe)
 }
 
-// installCLI writes the godiff command into a directory of the PATH.
+// installCLI writes the gopr command into a directory of the PATH.
 func installCLI() {
 	go func() {
 		home, _ := os.UserHomeDir()
@@ -65,7 +49,7 @@ func installCLI() {
 				continue
 			}
 			os.MkdirAll(dir, 0o755)
-			path := filepath.Join(dir, "godiff")
+			path := filepath.Join(dir, cliName)
 			if err := os.WriteFile(path, []byte(cliScript()), 0o755); err != nil {
 				errs = append(errs, err.Error())
 				continue
@@ -73,11 +57,11 @@ func installCLI() {
 			os.Chmod(path, 0o755)
 			mygo.Dialog.Message(mygo.MessageOptions{
 				Type:    mygo.MessageInfo,
-				Message: "The godiff command is installed",
-				Detail:  "It is at " + path + ". Run godiff in a Git repository to review its changes, or godiff <commit> and godiff <branch>.",
+				Message: "The " + cliName + " command is installed",
+				Detail:  "It is at " + path + ". Run gopr to open GoPR, or gopr owner/repo#123 to open a pull request.",
 			})
 			return
 		}
-		mygo.Dialog.Error("Could not install the godiff command", strings.Join(errs, "\n"))
+		mygo.Dialog.Error("Could not install the gopr command", strings.Join(errs, "\n"))
 	}()
 }

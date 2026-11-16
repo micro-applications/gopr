@@ -44,27 +44,18 @@ func (w *window) commands() []command {
 	}
 	return []command{
 		{title: "Focus File Filter", keys: "⌘P", run: w.focusFilter},
-		{title: "Find in Diffs", keys: "⌘F", run: func() { w.finding = true }},
-		{title: "Open Commit", hint: "Review a commit", run: func() { w.openDialog(dialogCommit) }},
-		{title: "Open Branch", hint: "Compare with a branch", run: func() { w.openDialog(dialogBranch) }},
-		{title: "Open Pull Request", hint: "Review a pull request on GitHub", run: func() { w.openDialog(dialogPull) }},
-		{title: "Open Folder", keys: "⌘O", run: openFolder},
-		{title: "Show File Tree", run: func() { w.tab, w.sidebarShown = 0, true }},
-		{title: "Show History", run: func() { w.tab, w.sidebarShown = 1, true }},
-		{title: "Show Pull Requests", keys: "⌘3", run: w.showPulls},
+		{title: "Find in Diffs", keys: "⌘F", run: func() { *w.findOpen() = true }},
+		{title: "Open Pull Request", hint: "Review a pull request on GitHub", keys: "⌘O", run: func() { w.openDialog(dialogPull) }},
+		{title: "Toggle Files", keys: "⌘⇧E", run: w.toggleFiles},
 		{title: "Review with AI", hint: w.agentHint(), keys: "⌘⇧I", run: w.reviewWithAI},
 		{title: "Stop the AI Review", run: w.stopAnalysis},
 		{title: "Next AI Note", keys: "N", run: notes(1)},
 		{title: "Previous AI Note", keys: "⇧N", run: notes(-1)},
+		{title: "Next Pull Request Down the Stack", keys: "⇧J", run: func() { w.moveInStack(-1) }},
+		{title: "Next Pull Request Up the Stack", keys: "⇧K", run: func() { w.moveInStack(1) }},
 		{title: "Group Files by Kind", run: func() { w.chooseGrouping(groupKind) }},
 		{title: "Group Files by AI Review", run: func() { w.chooseGrouping(groupAI) }},
 		{title: "Ungroup Files", run: func() { w.chooseGrouping(groupNone) }},
-		{title: "Show Uncommitted Changes", run: func() { w.setSource(w.launchWorkTree()) }},
-		{title: "Commit…", run: func() {
-			if w.source.kind == sourceWorkingTree && !w.commitOpen {
-				w.toggleCommit()
-			}
-		}},
 		{title: "Copy Review Comments", run: w.copyComments},
 		{title: "Submit Review", hint: "Approve, comment or request changes", run: w.openSubmit},
 		{title: "Open Pull Request on GitHub", run: w.openPullOnGitHub},
@@ -82,6 +73,7 @@ func (w *window) commands() []command {
 		}},
 		{title: "Open File in Editor", hint: selected, keys: "⌘⇧O", run: w.openCurrent},
 		{title: "Toggle Sidebar", keys: "⌘⇧B", run: w.toggleSidebar},
+		{title: "Toggle Focus Mode", keys: "⌘⇧F", run: w.toggleFocus},
 		{title: "Collapse All Files", run: func() { w.setAllCollapsed(true) }},
 		{title: "Expand All Files", run: func() { w.setAllCollapsed(false) }},
 		{title: "Toggle Diff Layout", hint: layout, run: toggleLayout},
@@ -89,11 +81,18 @@ func (w *window) commands() []command {
 		{title: "Toggle Whitespace", hint: whitespace, run: func() {
 			cfg.Update(func(s *Settings) { s.ShowWhitespace = !s.ShowWhitespace })
 		}},
-		{title: "Increase Code Font Size", keys: "⌘+", run: func() { changeFontSize(1) }},
-		{title: "Decrease Code Font Size", keys: "⌘-", run: func() { changeFontSize(-1) }},
-		{title: "Reset Code Font Size", keys: "⌘0", run: func() { changeFontSize(0) }},
+		{title: "Zoom In", keys: "⌘+", run: func() { changeZoom(1) }},
+		{title: "Zoom Out", keys: "⌘-", run: func() { changeZoom(-1) }},
+		{title: "Actual Size", keys: "⌘0", run: func() { changeZoom(0) }},
+		{title: "Markdown Width: Narrow", run: func() { setMarkdownWidth("narrow") }},
+		{title: "Markdown Width: Medium", run: func() { setMarkdownWidth("medium") }},
+		{title: "Markdown Width: Wide", run: func() { setMarkdownWidth("wide") }},
+		{title: "Markdown Width: Full Width", run: func() { setMarkdownWidth("full") }},
+		{title: "Markdown Text: Bigger", run: func() { changeMarkdownFontSize(1) }},
+		{title: "Markdown Text: Smaller", run: func() { changeMarkdownFontSize(-1) }},
+		{title: "Markdown Text: Default Size", run: func() { changeMarkdownFontSize(0) }},
 		{title: "Open Config File", run: openConfig},
-		{title: "Refresh Changes", keys: "⌘R", run: w.refresh},
+		{title: "Refresh", keys: "⌘R", run: w.refreshAll},
 		{title: "Keyboard Shortcuts", keys: "⇧?", run: func() { w.help = true }},
 	}
 }
@@ -110,15 +109,34 @@ func toggleLayout() {
 
 func toggleWrap() { cfg.Update(func(s *Settings) { s.WordWrap = !s.WordWrap }) }
 
-// changeFontSize makes the code larger or smaller, or resets it with 0.
-func changeFontSize(delta int) {
-	cfg.Update(func(s *Settings) {
-		if delta == 0 {
-			s.CodeFontSize = defaultSettings().CodeFontSize
-		} else {
-			s.CodeFontSize += delta
+// zoomLevels are the zooms ⌘+ and ⌘- step through, as a browser's.
+var zoomLevels = []float64{0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3}
+
+// nextZoom is the zoom a step in (1) or out (-1) from z, 1 for 0.
+func nextZoom(z float64, step int) float64 {
+	switch {
+	case step > 0:
+		for _, l := range zoomLevels {
+			if l > z+1e-6 {
+				return l
+			}
 		}
-	})
+		return zoomLevels[len(zoomLevels)-1]
+	case step < 0:
+		for i := len(zoomLevels) - 1; i >= 0; i-- {
+			if zoomLevels[i] < z-1e-6 {
+				return zoomLevels[i]
+			}
+		}
+		return zoomLevels[0]
+	}
+	return 1
+}
+
+// changeZoom shows everything larger (1), smaller (-1), or at its size
+// (0).
+func changeZoom(step int) {
+	cfg.Update(func(s *Settings) { s.Zoom = nextZoom(s.Zoom, step) })
 }
 
 func openConfig() {
@@ -131,8 +149,12 @@ func openConfig() {
 }
 
 func (w *window) focusFilter() {
-	w.sidebarShown = true
-	w.tab = 0
+	if len(w.files) == 0 {
+		return // no pane to focus
+	}
+	if !w.filesShown {
+		w.toggleFiles()
+	}
 	w.filterFocus = true
 }
 
@@ -184,7 +206,7 @@ func (w *window) palette(c *ui.Context) {
 		w.paletteQuery = ""
 		cmds[i].run()
 	}
-	ui.DialogBase(c, &w.paletteOpen, func(backdrop, panel *ui.Element) {
+	ui.DialogBase(c, &w.paletteOpen, func(backdrop, panel ui.Element) {
 		backdrop.Background(ui.RGBA(0, 0, 0, 0.12)).Justify(ui.Start).Padding(120, 0, 0, 0)
 		panel.Width(560).MaxHeight(440).Radius(16).Background(pal.headerBg).Border(1, pal.cardBorder).
 			Shadow(0, 20, 60, 0, ui.RGBA(0, 0, 0, 0.28)).Clip().Label("Command bar")
@@ -252,7 +274,7 @@ func (w *window) palette(c *ui.Context) {
 
 // paletteMoved reports whether the pointer moved over an item, so that a
 // list scrolled under a still pointer keeps the row the keys chose.
-func (w *window) paletteMoved(e *ui.Element) bool {
+func (w *window) paletteMoved(e ui.Element) bool {
 	x, y, over := e.PointerPosition()
 	if !over {
 		return false
@@ -267,8 +289,6 @@ type dialogKind uint8
 
 const (
 	dialogNone dialogKind = iota
-	dialogCommit
-	dialogBranch
 	dialogPull
 )
 
@@ -279,61 +299,21 @@ func (w *window) openDialog(k dialogKind) {
 	w.dialogErr = ""
 }
 
-// sourceDialog asks for a commit or a branch to review.
+// sourceDialog asks for a pull request to review, of any repository.
 func (w *window) sourceDialog(c *ui.Context) {
 	t := c.Theme()
 	if w.dialog == dialogNone {
 		return
 	}
-	title, desc, label, placeholder := "Open Commit", "Review a commit by SHA or revision, such as HEAD~1.", "Commit", "HEAD~1 or a commit SHA"
-	switch w.dialog {
-	case dialogBranch:
-		title, desc, label, placeholder = "Open Branch", "Compare the current working tree with a branch.", "Branch name", "main"
-	case dialogPull:
-		title, desc, label, placeholder = "Open Pull Request", "Review a pull request of this repository on GitHub, open or not.", "Pull request", "123, owner/repo#123 or its URL"
-	}
+	title, desc, label, placeholder := "Open Pull Request", "Review a pull request on GitHub, open or not.", "Pull request", "owner/repo#123 or its URL"
 	open := func() {
-		v := strings.TrimSpace(w.dialogValue)
-		if v == "" {
-			w.dialogErr = "Enter a " + strings.ToLower(label) + "."
+		repo, n, ok := github.ParsePull(w.dialogValue)
+		if !ok || repo.IsZero() {
+			w.dialogErr = "Enter a pull request as owner/repo#123 or its URL."
 			return
 		}
-		if w.dialogBusy {
-			return
-		}
-		// git answers off the main thread.
-		kind := w.dialog
-		w.dialogBusy = true
-		w.background(func() {
-			var hash string
-			var err error
-			if kind == dialogPull {
-				hash, err = resolvePull(w.repo, v)
-			} else {
-				hash, err = w.repo.Resolve(v)
-			}
-			w.update(func() {
-				w.dialogBusy = false
-				if !w.dialogOpen || w.dialog != kind {
-					return
-				}
-				switch {
-				case err != nil && kind == dialogBranch:
-					w.dialogErr = "Branch \"" + v + "\" does not exist in this repository."
-				case err != nil:
-					w.dialogErr = err.Error()
-				case kind == dialogPull:
-					w.dialogOpen = false
-					w.setSource(source{kind: sourcePull, ref: hash})
-				case kind == dialogCommit:
-					w.dialogOpen = false
-					w.setSource(source{kind: sourceCommit, ref: hash})
-				default:
-					w.dialogOpen = false
-					w.setSource(source{kind: sourceBranch, ref: v})
-				}
-			})
-		})
+		w.dialogOpen = false
+		w.openPull(repo, n)
 	}
 	ui.Modal(c, &w.dialogOpen, func() {
 		ui.Column(c).Width(420).Gap(14).Children(func() {
@@ -350,11 +330,7 @@ func (w *window) sourceDialog(c *ui.Context) {
 				if ui.Button(c, "Cancel").Clicked() {
 					w.dialogOpen = false
 				}
-				label := "Open"
-				if w.dialogBusy {
-					label = "Opening…"
-				}
-				if ui.PrimaryButton(c, label).Disabled(w.dialogBusy).Clicked() {
+				if ui.PrimaryButton(c, "Open").Clicked() {
 					open()
 				}
 			})
@@ -374,11 +350,11 @@ func (w *window) shortcutsHelp(c *ui.Context) {
 	}{
 		{"Navigation", [][2]string{{"Command bar", "⌘K"}, {"Filter files", "⌘P"}, {"Next hunk", "J"}, {"Previous hunk", "K"},
 			{"Next AI note", "N"}, {"Previous AI note", "⇧N"},
-			{"Toggle sidebar", "⌘⇧B"}, {"Toggle word wrap", "⌥Z"}, {"Open file in editor", "⌘⇧O"}, {"Refresh changes", "⌘R"}}},
+			{"Toggle sidebar", "⌘⇧B"}, {"Toggle files", "⌘⇧E"}, {"Focus mode", "⌘⇧F"}, {"Toggle word wrap", "⌥Z"}, {"Open file in editor", "⌘⇧O"}, {"Refresh", "⌘R"}}},
 		{"Search", [][2]string{{"Find in diffs", "⌘F"}, {"Next match", "↩"}, {"Previous match", "⇧↩"}, {"Close search", "Esc"}}},
 		{"Comments", [][2]string{{"Comment on a line", "Click"}, {"Comment on the hunk", "↩"}, {"Add comment", "⌘↩"}, {"Discard comment", "Esc"}}},
-		{"Pull requests", [][2]string{{"Pull requests", "⌘3"}, {"Review with AI", "⌘⇧I"}, {"Add to your review", "⌘↩"}, {"Reply", "⌘↩"}}},
-		{"Code", [][2]string{{"Bigger text", "⌘+"}, {"Smaller text", "⌘-"}, {"Actual size", "⌘0"}}},
+		{"Pull requests", [][2]string{{"Open pull request", "⌘O"}, {"Down the stack", "⇧J"}, {"Up the stack", "⇧K"}, {"Review with AI", "⌘⇧I"}, {"Add to your review", "⌘↩"}, {"Reply", "⌘↩"}}},
+		{"Window", [][2]string{{"Zoom in", "⌘+"}, {"Zoom out", "⌘-"}, {"Actual size", "⌘0"}}},
 	}
 	ui.Modal(c, &w.help, func() {
 		ui.Column(c).Width(620).Gap(16).Children(func() {
@@ -403,15 +379,6 @@ func (w *window) shortcutsHelp(c *ui.Context) {
 			})
 		})
 	})
-}
-
-// showPulls shows the pull requests in the sidebar.
-func (w *window) showPulls() {
-	if !w.gh.ok() {
-		w.openDialog(dialogPull)
-		return
-	}
-	w.tab, w.sidebarShown = 2, true
 }
 
 // openSubmit opens the dialog submitting the review of the pull request

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -53,14 +54,58 @@ func TestKindOf(t *testing.T) {
 	}
 }
 
-// fakeGitHub answers as GitHub's API does for acme/app#1, and records
-// the writes.
+// fakeGitHub answers as GitHub's API does for acme/app#1, and the pull
+// requests of others, and records the writes.
 type fakeGitHub struct {
-	mu       sync.Mutex
-	base     string
-	head     string
-	comments string
-	writes   []string
+	mu sync.Mutex
+	// body is the description of acme/app#1, as GitHub has it: a template's
+	// comment and a sentence when empty.
+	body string
+	// reviewBody is the body of cy\'s review: "Not yet." when empty.
+	reviewBody string
+	base       string
+	head       string
+	comments   string
+	writes     []string
+	// others are more pull requests, by their path in the API, as
+	// /repos/acme/web/pulls/1.
+	others map[string]fakePull
+	// The inbox: the viewer's organizations, the pull requests of its
+	// sections, and the number of matches of mine when more than it lists.
+	orgs         []string
+	mine, review []fakeInboxPull
+	mineTotal    int
+	// queries are the GraphQL requests: the query of a search, else
+	// "viewer".
+	queries []string
+	// status, when not 0, answers every request.
+	status int
+}
+
+// fakeInboxPull is a pull request of an inbox search.
+type fakeInboxPull struct {
+	repo   string
+	number int
+	title  string
+}
+
+// searchJSON is the answer of a search for pulls, with total matches, or
+// as many as pulls when 0.
+func searchJSON(pulls []fakeInboxPull, total int) string {
+	if total == 0 {
+		total = len(pulls)
+	}
+	var nodes []string
+	for _, p := range pulls {
+		nodes = append(nodes, fmt.Sprintf(`{"number":%d,"title":%q,"url":"https://github.com/%s/pull/%d","createdAt":%q,"updatedAt":%q,"author":{"login":"bo"},"repository":{"nameWithOwner":%q}}`,
+			p.number, p.title, p.repo, p.number, time.Now().Format(time.RFC3339), time.Now().Format(time.RFC3339), p.repo))
+	}
+	return fmt.Sprintf(`{"data":{"search":{"issueCount":%d,"nodes":[%s]}}}`, total, strings.Join(nodes, ","))
+}
+
+// fakePull is a pull request fakeGitHub answers for, without threads.
+type fakePull struct {
+	title, base, head string
 }
 
 func (f *fakeGitHub) serve(t *testing.T) {
@@ -68,6 +113,38 @@ func (f *fakeGitHub) serve(t *testing.T) {
 		body, _ := io.ReadAll(r.Body)
 		f.mu.Lock()
 		defer f.mu.Unlock()
+		if f.status != 0 {
+			w.WriteHeader(f.status)
+			fmt.Fprint(w, `{"message":"Bad credentials"}`)
+			return
+		}
+		if r.URL.Path == "/graphql" {
+			var req struct {
+				Query     string `json:"query"`
+				Variables struct {
+					Query string `json:"query"`
+				} `json:"variables"`
+			}
+			json.Unmarshal(body, &req)
+			switch q := req.Variables.Query; {
+			case strings.Contains(q, "author:@me"):
+				f.queries = append(f.queries, q)
+				fmt.Fprint(w, searchJSON(f.mine, f.mineTotal))
+				return
+			case strings.Contains(q, "review-requested:@me"):
+				f.queries = append(f.queries, q)
+				fmt.Fprint(w, searchJSON(f.review, 0))
+				return
+			case strings.Contains(req.Query, "viewer"):
+				f.queries = append(f.queries, "viewer")
+				var orgs []string
+				for _, o := range f.orgs {
+					orgs = append(orgs, fmt.Sprintf(`{"login":%q}`, o))
+				}
+				fmt.Fprintf(w, `{"data":{"viewer":{"login":"ada","organizations":{"nodes":[%s]}}}}`, strings.Join(orgs, ","))
+				return
+			}
+		}
 		if r.Method != http.MethodGet && (r.URL.Path != "/graphql" || strings.Contains(string(body), "mutation")) {
 			f.writes = append(f.writes, r.Method+" "+r.URL.Path+" "+string(body))
 			fmt.Fprint(w, `{}`)
@@ -75,24 +152,39 @@ func (f *fakeGitHub) serve(t *testing.T) {
 		}
 		switch r.URL.Path {
 		case "/repos/acme/app/pulls/1":
-			fmt.Fprintf(w, `{"number":1,"title":"Greet louder","body":"<!-- template -->\nMakes the greeting shorter.","state":"open","user":{"login":"bo"},
+			body := f.body
+			if body == "" {
+				body = "<!-- template -->\nMakes the greeting shorter."
+			}
+			quoted, _ := json.Marshal(body)
+			fmt.Fprintf(w, `{"number":1,"title":"Greet louder","body":%s,"state":"open","user":{"login":"bo"},
 				"html_url":"https://github.com/acme/app/pull/1","base":{"ref":"main","sha":%q,"label":"acme:main"},
-				"head":{"ref":"greet","sha":%q,"label":"bo:greet"},"additions":3,"deletions":1,"changed_files":2,"commits":1}`, f.base, f.head)
-		case "/repos/acme/app/pulls":
-			fmt.Fprint(w, `[{"number":1,"title":"Greet louder","user":{"login":"bo"},"head":{"ref":"greet"}}]`)
+				"head":{"ref":"greet","sha":%q,"label":"bo:greet"},"additions":3,"deletions":1,"changed_files":2,"commits":1}`, quoted, f.base, f.head)
 		case "/repos/acme/app/pulls/1/comments":
 			fmt.Fprint(w, f.comments)
 		case "/repos/acme/app/pulls/1/reviews":
-			fmt.Fprint(w, `[{"id":9,"state":"CHANGES_REQUESTED","user":{"login":"cy"},"body":"Not yet."}]`)
+			review := f.reviewBody
+			if review == "" {
+				review = "Not yet."
+			}
+			quoted, _ := json.Marshal(review)
+			fmt.Fprintf(w, `[{"id":9,"state":"CHANGES_REQUESTED","user":{"login":"cy"},"body":%s}]`, quoted)
 		case "/user":
 			fmt.Fprint(w, `{"login":"ada"}`)
 		case "/graphql":
-			if strings.Contains(string(body), "search(") {
-				fmt.Fprint(w, `{"data":{"search":{"nodes":[{"number":1,"title":"Greet louder","author":{"login":"bo"},"headRefName":"greet","reviewDecision":"CHANGES_REQUESTED"}]}}}`)
-				return
-			}
 			fmt.Fprint(w, `{"data":{"repository":{"pullRequest":{"reviewThreads":{"pageInfo":{"hasNextPage":false},"nodes":[{"id":"T1","isResolved":false,"comments":{"nodes":[{"fullDatabaseId":"1"}]}}]}}}}}`)
 		default:
+			for path, p := range f.others {
+				switch r.URL.Path {
+				case path:
+					fmt.Fprintf(w, `{"number":1,"title":%q,"body":"","state":"open","user":{"login":"bo"},
+						"base":{"ref":"main","sha":%q,"label":"acme:main"},"head":{"ref":"change","sha":%q,"label":"bo:change"}}`, p.title, p.base, p.head)
+					return
+				case path + "/comments", path + "/reviews":
+					fmt.Fprint(w, `[]`)
+					return
+				}
+			}
 			w.WriteHeader(http.StatusNotFound)
 			fmt.Fprint(w, `{"message":"Not Found"}`)
 		}
@@ -101,6 +193,26 @@ func (f *fakeGitHub) serve(t *testing.T) {
 	old := github.API
 	github.API = s.URL
 	t.Cleanup(func() { github.API = old })
+}
+
+// requests returns the GraphQL requests made, as queries records them.
+func (f *fakeGitHub) requests() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.queries)
+}
+
+// searches returns the queries of the searches made.
+func (f *fakeGitHub) searches() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []string
+	for _, q := range f.queries {
+		if q != "viewer" {
+			out = append(out, q)
+		}
+	}
+	return out
 }
 
 func (f *fakeGitHub) takeWrites() []string {
@@ -115,7 +227,14 @@ func (f *fakeGitHub) takeWrites() []string {
 // pull request's head as GitHub keeps it, and a clone of its main branch
 // alone, which lacks it.
 func pullRepo(t *testing.T) (clone, base, head string) {
-	server := t.TempDir()
+	_, clone, base, head = pullServer(t)
+	return clone, base, head
+}
+
+// pullServer is pullRepo with the path of the repository GitHub keeps.
+// A readme, when given, is README.md on the pull request's branch.
+func pullServer(t *testing.T, readme ...string) (server, clone, base, head string) {
+	server = t.TempDir()
 	gitIn(t, server, "init", "-q", "-b", "main")
 	writeFile(t, server, "main.go", mainGo)
 	writeFile(t, server, "README.md", "# App\n")
@@ -125,6 +244,9 @@ func pullRepo(t *testing.T) (clone, base, head string) {
 	gitIn(t, server, "checkout", "-q", "-b", "greet")
 	writeFile(t, server, "main.go", strings.Replace(mainGo, `"Hello, " + name`, `"Hi, " + name + "!"`, 1))
 	writeFile(t, server, "main_test.go", "package main\n\nimport \"testing\"\n\nfunc TestGreet(t *testing.T) {}\n")
+	for _, r := range readme {
+		writeFile(t, server, "README.md", r)
+	}
 	gitIn(t, server, "add", ".")
 	gitIn(t, server, "commit", "-q", "-m", "Greet louder")
 	head = strings.TrimSpace(gitIn(t, server, "rev-parse", "HEAD"))
@@ -136,7 +258,7 @@ func pullRepo(t *testing.T) (clone, base, head string) {
 	// Through git's transport, which sends what main holds alone.
 	gitIn(t, filepath.Dir(clone), "clone", "-q", "--single-branch", "--branch", "main", "file://"+server, clone)
 	gitIn(t, clone, "remote", "set-url", "origin", server)
-	return clone, base, head
+	return server, clone, base, head
 }
 
 // withSettings changes the settings for a test.
@@ -170,15 +292,7 @@ func TestPullRequest(t *testing.T) {
 	tt := ui.NewTester(w.view, 1280, 1400)
 	tt.Frame()
 
-	// The tab lists the pull requests.
-	w.showPulls()
-	tt.Frame()
-	if !tt.HasText("Greet louder") {
-		t.Fatalf("no pull request in %q", tt.Texts())
-	}
-	if err := tt.Click("Greet louder"); err != nil {
-		t.Fatal(err)
-	}
+	w.setSource(pullSource(github.Repo{Owner: "acme", Name: "app"}, 1))
 	tt.Frame()
 	tt.Frame()
 	if w.source != pullSource(github.Repo{Owner: "acme", Name: "app"}, 1) || w.loadErr != nil {
@@ -386,33 +500,6 @@ func TestAIReview(t *testing.T) {
 	}
 }
 
-func TestParsePullArgs(t *testing.T) {
-	dir := testRepo(t)
-	gitIn(t, dir, "remote", "add", "origin", "git@github.com:acme/app.git")
-	gitIn(t, dir, "remote", "add", "upstream", "https://github.com/up/app.git")
-	for _, tc := range []struct {
-		args []string
-		want string
-	}{
-		{[]string{"acme/app#5"}, "acme/app#5"},
-		{[]string{"https://github.com/acme/app/pull/7/files"}, "acme/app#7"},
-		{[]string{"--pr", "12"}, "up/app#12"},
-		{[]string{"#3"}, "up/app#3"},
-	} {
-		req, err := parseArgs(tc.args, dir)
-		if err != nil {
-			t.Errorf("%v: %v", tc.args, err)
-			continue
-		}
-		if req.src != (source{kind: sourcePull, ref: tc.want}) {
-			t.Errorf("%v: %+v", tc.args, req.src)
-		}
-	}
-	if _, err := parseArgs([]string{"other/thing#1"}, dir); err == nil || !strings.Contains(err.Error(), "no remote of other/thing") {
-		t.Errorf("another repository: %v", err)
-	}
-}
-
 func TestAIModelMenu(t *testing.T) {
 	w, tt := newTestWindow(t, testRepo(t))
 	// The models OpenCode lists, as if it had listed them.
@@ -533,5 +620,50 @@ func TestAINotes(t *testing.T) {
 	}
 	if !slices.ContainsFunc(w.commands(), func(c command) bool { return c.title == "Next AI Note" && c.run != nil }) {
 		t.Error("no command to go to the next note")
+	}
+}
+
+func TestPullRow(t *testing.T) {
+	freshState(t)
+	w := newWindow(nil, source{})
+	p := &github.Summary{Number: 4, Title: "Add limiter", Author: github.User{Login: "bo"}, ReviewDecision: "approved", Checks: "success"}
+	for _, repo := range []string{"acme/api", ""} {
+		for _, author := range []bool{true, false} {
+			tt := ui.NewTester(func(c *ui.Context) {
+				pullRow(c, w, paletteFor(c.Theme()), p, repo, author, false, false)
+			}, 400, 80)
+			tt.Frame()
+			for _, want := range []string{"Add limiter", "#4"} {
+				if _, ok := tt.Find(want); !ok {
+					t.Errorf("repo %q: no %q in %q", repo, want, tt.Texts())
+				}
+			}
+			if _, ok := tt.Find("bo"); ok != author {
+				t.Errorf("author %v: bo shown %v in %q", author, ok, tt.Texts())
+			}
+			// The repository shows by its name; its owner is in the tooltip.
+			if _, ok := tt.Find("acme/api"); ok {
+				t.Errorf("repo %q: owner shown in %q", repo, tt.Texts())
+			}
+			if _, ok := tt.Find("api"); ok != (repo != "") {
+				t.Errorf("repo %q: api shown %v in %q", repo, ok, tt.Texts())
+			}
+			repoBox, _ := tt.Find("api")
+			number, _ := tt.Find("#4")
+			if repo != "" && repoBox.X >= number.X {
+				t.Errorf("the repository %+v is not before the number %+v", repoBox, number)
+			}
+			if _, ok := tt.Find("Checks: success"); ok {
+				t.Error("passing checks marked")
+			}
+		}
+	}
+	p.Checks = "failure"
+	tt := ui.NewTester(func(c *ui.Context) {
+		pullRow(c, w, paletteFor(c.Theme()), p, "acme/api", true, false, false)
+	}, 400, 80)
+	tt.Frame()
+	if _, ok := tt.Find("Checks: failure"); !ok {
+		t.Error("failing checks not marked")
 	}
 }

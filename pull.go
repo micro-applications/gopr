@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/egoist/mygo/ui/markdown"
 	"strconv"
 	"strings"
 	"sync"
@@ -119,7 +120,18 @@ type pullState struct {
 	// checkedAt is when GitHub was last asked for new commits.
 	checkedAt time.Time
 
+	// stack is the stack the pull request is in, nil when alone;
+	// stackOpen shows the header's list of it.
+	stack        *github.Stack
+	stackLoading bool
+	stackOpen    bool
+
 	descOpen bool
+	// descOpts are the options of the description, rendered as Markdown,
+	// which keep its parse.
+	descOpts *markdown.Options
+	// descHeight is how tall the description is laid out whole.
+	descHeight float32
 	// Drafts of replies, the comment edited, and threads shown open,
 	// resolved or outdated as they are.
 	replies  map[int64]*string
@@ -180,8 +192,9 @@ type pulledRequest struct {
 
 // fetchPull reads a pull request, fetches its commits when the repository
 // lacks them, and reads its changes against where it branched, as GitHub
-// shows them. It runs off the main thread.
-func (w *window) fetchPull(gen int, src source, remote string, opts git.Options) (pulledRequest, error) {
+// shows them. It runs off the main thread, on the repository the load
+// started with: the window's may change meanwhile.
+func (w *window) fetchPull(gen int, local *git.Repo, src source, remote string, opts git.Options) (pulledRequest, error) {
 	var p pulledRequest
 	repo, n := src.pull()
 	status := func(s string) {
@@ -200,42 +213,42 @@ func (w *window) fetchPull(gen int, src source, remote string, opts git.Options)
 	p.meta, p.head = meta, meta.Head.SHA
 	base := meta.Base.SHA
 	var refspecs []string
-	if !w.repo.HasCommit(p.head) {
+	if !local.HasCommit(p.head) {
 		refspecs = append(refspecs, fmt.Sprintf("refs/pull/%d/head", n))
 	}
-	if !w.repo.HasCommit(base) {
+	if !local.HasCommit(base) {
 		refspecs = append(refspecs, "refs/heads/"+meta.Base.Ref)
 	}
 	if len(refspecs) > 0 && !w.stale(gen) {
 		status(fmt.Sprintf("Fetching #%d from %s…", n, remote))
-		ferr := w.repo.Fetch(ctx, remote, refspecs...)
+		ferr := local.Fetch(ctx, remote, refspecs...)
 		if ferr != nil && remote != repo.URL()+".git" {
 			// SSH may want a passphrase: GitHub serves public
 			// repositories over HTTPS without one.
-			if w.repo.Fetch(ctx, repo.URL()+".git", refspecs...) == nil {
+			if local.Fetch(ctx, repo.URL()+".git", refspecs...) == nil {
 				ferr = nil
 			}
 		}
-		if !w.repo.HasCommit(p.head) {
+		if !local.HasCommit(p.head) {
 			if ferr == nil {
 				ferr = errors.New("GitHub did not send them")
 			}
 			return p, fmt.Errorf("could not fetch the commits of #%d from %s: %s", n, remote, errorText(ferr))
 		}
-		if !w.repo.HasCommit(base) {
+		if !local.HasCommit(base) {
 			// The base branch moved on, its old head gone with a force
 			// push: diff against where it is now.
-			if r, err := w.repo.Resolve("FETCH_HEAD"); err == nil {
+			if r, err := local.Resolve("FETCH_HEAD"); err == nil {
 				base = r
 			}
 		}
 	}
 	status(fmt.Sprintf("Reading the changes of #%d…", n))
-	p.files, p.mergeBase, err = w.repo.Range(base, p.head, opts)
+	p.files, p.mergeBase, err = local.Range(base, p.head, opts)
 	if err != nil {
 		return p, err
 	}
-	p.commits = w.repo.Subjects(p.mergeBase, p.head, 250)
+	p.commits = local.Subjects(p.mergeBase, p.head, 250)
 	return p, nil
 }
 
@@ -397,27 +410,6 @@ func (w *window) checkPull(src source) {
 	})
 }
 
-// loadPulls lists the open pull requests of the repository's remote on
-// GitHub.
-func (w *window) loadPulls() {
-	if !w.gh.ok() || w.pullsLoading {
-		return
-	}
-	w.pullsLoading = true
-	repo := w.gh.repo
-	w.background(func() {
-		pulls, err := ghClient().OpenPulls(context.Background(), repo)
-		w.update(func() {
-			w.pullsLoading = false
-			w.pullsLoaded = true
-			w.pullsErr = err
-			if err == nil {
-				w.pulls = pulls
-			}
-		})
-	})
-}
-
 var token struct {
 	sync.Mutex
 	value string
@@ -437,6 +429,14 @@ func githubToken() string {
 		token.value, token.at = github.FindToken(), time.Now()
 	}
 	return token.value
+}
+
+// forgetGitHubToken makes the next githubToken look for the token again, as
+// after the user signs in.
+func forgetGitHubToken() {
+	token.Lock()
+	token.value, token.at = "", time.Time{}
+	token.Unlock()
 }
 
 // githubTokenKnown is the token as last found, without looking for it.

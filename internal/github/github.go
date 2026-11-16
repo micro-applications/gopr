@@ -39,25 +39,30 @@ var (
 // git@github.com:owner/repo.git or https://github.com/owner/repo.
 func ParseRemote(url string) (Repo, bool) {
 	m := remoteURL.FindStringSubmatch(strings.TrimSpace(url))
-	if m == nil {
+	if m == nil || dotted(m[1]) || dotted(m[2]) {
 		return Repo{}, false
 	}
 	return Repo{Owner: m[1], Name: m[2]}, true
 }
 
+// dotted reports whether a part of a repository's name is . or .., which
+// GitHub does not allow, and which would name another directory in a
+// path.
+func dotted(part string) bool { return part == "." || part == ".." }
+
 // ParsePull reads a pull request named as owner/repo#123, #123 or its URL.
 // The repository is zero for #123.
 func ParsePull(s string) (Repo, int, bool) {
 	s = strings.TrimSpace(s)
-	if m := pullURL.FindStringSubmatch(s); m != nil {
-		n, _ := strconv.Atoi(m[3])
-		return Repo{Owner: m[1], Name: m[2]}, n, n > 0
+	m := pullURL.FindStringSubmatch(s)
+	if m == nil {
+		m = pullRef.FindStringSubmatch(s)
 	}
-	if m := pullRef.FindStringSubmatch(s); m != nil {
-		n, _ := strconv.Atoi(m[3])
-		return Repo{Owner: m[1], Name: m[2]}, n, n > 0
+	if m == nil || dotted(m[1]) || dotted(m[2]) {
+		return Repo{}, 0, false
 	}
-	return Repo{}, 0, false
+	n, _ := strconv.Atoi(m[3])
+	return Repo{Owner: m[1], Name: m[2]}, n, n > 0
 }
 
 // API is where the client sends its requests, GitHub's own unless tests

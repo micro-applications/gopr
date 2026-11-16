@@ -621,6 +621,21 @@ func (r *Repo) Remotes() []Remote {
 	return remotes
 }
 
+// Clone clones the repository at url into dir, as the user's git would,
+// without asking for credentials no one can type.
+func Clone(ctx context.Context, url, dir string) error {
+	args := []string{"clone", "--quiet", url, dir}
+	cmd := exec.CommandContext(ctx, binary(), args...)
+	proc.HideConsole(cmd)
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "LC_ALL=C", "GIT_SSH_COMMAND="+sshCommand())
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return &Error{Args: args, Stderr: stderr.String(), Err: err}
+	}
+	return nil
+}
+
 // HasCommit reports whether the repository holds a commit.
 func (r *Repo) HasCommit(rev string) bool {
 	_, err := r.Git("cat-file", "-e", rev+"^{commit}")

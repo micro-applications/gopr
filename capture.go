@@ -4,7 +4,6 @@ import (
 	"log"
 	"os"
 	"runtime/pprof"
-	"strings"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -26,13 +25,6 @@ func (w *window) captureIfAsked() {
 			if path := os.Getenv("GODIFF_CPUPROFILE"); path != "" {
 				prof, _ = os.Create(path)
 				pprof.StartCPUProfile(prof)
-			}
-			// A commit resolves here, off the main thread, as a click on
-			// the history has it at hand.
-			if ref, ok := strings.CutPrefix(setup, "commit:"); ok {
-				if hash, err := w.repo.Resolve(ref); err == nil {
-					setup = "commit:" + hash
-				}
 			}
 			w.win.Update(func() { w.debugSetup(setup) })
 			time.Sleep(1200 * time.Millisecond)
@@ -58,20 +50,16 @@ func (w *window) captureIfAsked() {
 	}()
 }
 
-// debugSetup puts the window in a state to capture.
+// debugSetup puts the window in a state to capture: none without a
+// repository.
 func (w *window) debugSetup(setup string) {
-	if hash, ok := strings.CutPrefix(setup, "commit:"); ok {
-		w.setSource(source{kind: sourceCommit, ref: hash})
+	if w.repo == nil {
 		return
 	}
 	switch setup {
 	case "unified":
 		w.settings.DiffStyle = "unified"
 		w.rowsDirty = true
-	case "history":
-		w.tab = 1
-	case "commit":
-		w.toggleCommit()
 	case "palette":
 		w.paletteOpen = true
 	case "find":
@@ -86,8 +74,6 @@ func (w *window) debugSetup(setup string) {
 	case "wrap":
 		w.settings.WordWrap = true
 		w.rowsDirty = true
-	case "pulls":
-		w.showPulls()
 	case "ai":
 		w.runAnalysis()
 	}

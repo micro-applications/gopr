@@ -20,6 +20,7 @@ import (
 	"github.com/egoist/godiff/internal/highlight"
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/markdown"
 )
 
 // sourceKind is what a window reviews.
@@ -37,11 +38,6 @@ type source struct {
 	ref  string // the commit, the branch, or the pull request as owner/repo#123
 }
 
-// historyPage is how many commits the History tab loads at a time: git
-// lists hundreds in a few milliseconds, and the list builds only the rows
-// in view.
-const historyPage = 200
-
 // session is the review of one source, kept while the window shows
 // another.
 type session struct {
@@ -56,16 +52,18 @@ type window struct {
 	launch   source // what the window was opened on
 	source   source
 	settings Settings
+	// fontTheme is the theme of fontThemeOf with the text in the settings' UI
+	// font family.
+	fontTheme, fontThemeOf *ui.Theme
 
-	branch     string
-	files      []*fileState
-	commit     *git.Commit // the commit reviewed, for sourceCommit
-	base       string      // the merge base, for sourceBranch and sourcePull
-	loading    bool
-	loadedOnce bool
-	loadErr    error
-	gen        int // counts loads, to drop the results of older ones
-	genA       atomic.Int64
+	branch  string
+	files   []*fileState
+	commit  *git.Commit // the commit reviewed, for sourceCommit
+	base    string      // the merge base, for sourceBranch and sourcePull
+	loading bool
+	loadErr error
+	gen     int // counts loads, to drop the results of older ones
+	genA    atomic.Int64
 	// loadStart is when the load started.
 	loadStart time.Time
 	viewed    map[string]string
@@ -74,29 +72,28 @@ type window struct {
 
 	// The sidebar.
 	sidebarShown bool
+	// focus hides the sidebar and the files pane, as they were in
+	// focusPrev, and centers the review.
+	focus        bool
+	focusPrev    [2]bool
 	sidebarWidth float32
-	tab          int // 0 files, 1 history
-	filter       string
-	filterFocus  bool
-	treeList     ui.ListState
-	treeEl       *ui.Element
-	treeSel      string // the key of the row chosen
-	treeRows     []treeRow
-	closedDirs   map[string]bool
-	treeItems    map[string]*treeNode
-	treeRoots    []string
-	history      []git.Commit
-	historyLimit int
-	historyMore  bool
-	historyList  ui.ListState
-	historyEl    *ui.Element
-	commitTimes  map[string]commitTime
-	// historyFilter filters the History tab, apart from the files'.
-	historyFilter  string
-	historyLoading bool
+	dragWidth    float32
+
+	// The files pane, and its tree of the files.
+	filesShown     bool
+	filesWidth     float32
+	filesDragWidth float32
+	filesDragging  bool
+	filter         string
+	filterFocus    bool
+	treeList       ui.ListState
+	treeSel        string // the key of the row chosen
+	treeRows       []treeRow
+	closedDirs     map[string]bool
+	treeItems      map[string]*treeNode
+	treeRoots      []string
 	// reloaded are the files that changed in the last refresh.
-	reloaded  map[string]bool
-	dragWidth float32
+	reloaded map[string]bool
 
 	// The diff surface.
 	rows       []row
@@ -104,7 +101,6 @@ type window struct {
 	list       ui.ListState
 	current    int // the file shown at the top of the surface
 	hscroll    map[string]float32
-	diffListEl *ui.Element
 	revealedAt time.Time
 	now        time.Time
 	charW      float32
@@ -113,7 +109,6 @@ type window struct {
 	selFile, selHunk int
 	focusList        bool
 	focusedOnce      bool
-	focusHistory     bool
 	switchedAt       time.Time // when the source last changed, for GODIFF_DEBUG
 	debugPressed     bool
 	// hold keeps the background work of tests in held, to run frames
@@ -131,21 +126,34 @@ type window struct {
 	matchesFor  string
 	fileMatches map[int]bool
 
+	// The tabs of whole files, and the one shown: 0 for the changes, i for
+	// fileTabs[i-1].
+	fileTabs  []fileTab
+	activeTab int
+	// mdSource shows the source of a Markdown file's tab rather than its
+	// preview, by path. mdOpts are the previews' options, which keep their
+	// pictures, for the clone and the head in mdOptsFor.
+	mdSource map[string]bool
+	// mermaid are the Mermaid diagrams of the previews, laid out or being.
+	mermaid map[mermaidKey]*mermaidDiagram
+	// viewer shows a diagram over the window, to zoom.
+	viewer *mermaidViewer
+	// ghMarkdown are the options of review comments\' Markdown, by body.
+	ghMarkdown map[string]*markdown.Options
+	mdOpts     map[string]*markdown.Options
+	mdOptsFor  string
+	// The revisions of the old and the new side of the last load; "" is
+	// the work tree.
+	oldRev, newRev string
+
 	// The reviews of the other sources.
 	sessions map[source]*session
 
-	// GitHub: the repository's remote there, its open pull requests, and
-	// the pull requests reviewed, the one shown in pr.
-	gh           ghRemote
-	pulls        []github.Summary
-	pullsLoaded  bool
-	pullsLoading bool
-	pullsErr     error
-	pullsList    ui.ListState
-	pullsEl      *ui.Element
-	pullsFilter  string
-	pr           *pullState
-	prs          map[source]*pullState
+	// GitHub: the repository's remote there, and the pull requests
+	// reviewed, the one shown in pr.
+	gh  ghRemote
+	pr  *pullState
+	prs map[source]*pullState
 
 	// The groups of the files: by kind, or as an agent's review has them.
 	groupPref groupMode
@@ -168,18 +176,6 @@ type window struct {
 	copied     string
 	copiedAt   time.Time
 
-	// Committing.
-	commitOpen     bool
-	subject        string
-	body           string
-	commitPaths    map[string]bool
-	commitBusy     bool
-	commitErr      string
-	commitOutput   string
-	commitDone     string // the hash committed
-	committedFiles int
-	commitFocus    bool
-
 	// The command bar.
 	paletteOpen  bool
 	paletteQuery string
@@ -188,17 +184,23 @@ type window struct {
 	// palettePointer is where the pointer was over the list.
 	palettePointer [2]float32
 
-	// The dialog opening a commit or a branch.
+	// The dialog opening a pull request.
 	dialog      dialogKind
 	dialogOpen  bool
 	dialogValue string
 	dialogErr   string
-	dialogBusy  bool
 
-	// changed is set when the work tree changed since the last load.
-	changed   bool
-	signature string
-	help      bool
+	// changed is set when the pull request shown has new commits.
+	changed bool
+	help    bool
+
+	// The pull request whose repository is being found, and why it could
+	// not be.
+	opening *opening
+	openErr error
+
+	// The sidebar's pull requests.
+	inbox inboxState
 }
 
 var (
@@ -206,41 +208,26 @@ var (
 	windows   []*window
 )
 
-// openWindow opens a window on the repository holding dir.
-func openWindow(dir string, src source) error {
-	repo, err := git.Open(dir)
-	if err != nil {
-		return err
-	}
-	if src.kind == sourceCommit {
-		hash, err := repo.Resolve(src.ref)
-		if err != nil {
-			return err
-		}
-		src.ref = hash
-	}
-	if src.kind == sourcePull {
-		ref, err := resolvePull(repo, src.ref)
-		if err != nil {
-			return err
-		}
-		src.ref = ref
-	}
-	// A repository already open comes to the front.
+// openMu keeps two launches from making two windows.
+var openMu sync.Mutex
+
+// openApp makes the window of the app, or brings the one open to the front.
+func openApp() *window {
+	openMu.Lock()
+	defer openMu.Unlock()
 	windowsMu.Lock()
-	for _, w := range windows {
-		if w.repo.Root == repo.Root && w.launch == src {
-			windowsMu.Unlock()
-			w.win.Show()
-			w.win.Focus()
-			return nil
-		}
+	if len(windows) > 0 {
+		w := windows[0]
+		windowsMu.Unlock()
+		w.win.Show()
+		w.win.Focus()
+		return w
 	}
 	windowsMu.Unlock()
 
-	w := newWindow(repo, src)
+	w := newWindow(nil, source{})
 	w.win = mygo.NewWindow(mygo.WindowOptions{
-		Title:          windowTitle(repo.Root, src),
+		Title:          "GoPR",
 		Width:          1280,
 		Height:         860,
 		MinWidth:       720,
@@ -254,7 +241,6 @@ func openWindow(dir string, src source) error {
 	windowsMu.Lock()
 	windows = append(windows, w)
 	windowsMu.Unlock()
-	stop := make(chan struct{})
 	w.win.OnClose(func(*mygo.CloseEvent) {
 		if w.settings.CopyCommentsOnClose && len(w.comments) > 0 {
 			mygo.Clipboard.WriteText(w.commentsMarkdown())
@@ -262,7 +248,6 @@ func openWindow(dir string, src source) error {
 	})
 	offSettings := cfg.OnChange(func(s Settings) { w.win.Update(func() { w.applySettings(s) }) })
 	w.win.OnClosed(func() {
-		close(stop)
 		offSettings()
 		windowsMu.Lock()
 		for i, o := range windows {
@@ -273,20 +258,21 @@ func openWindow(dir string, src source) error {
 		}
 		windowsMu.Unlock()
 	})
-	w.win.OnFocus(func() { go w.checkChanges() })
-	go noteRecent(repo.Root)
-	w.load()
-	w.loadHistory()
-	w.loadUser()
-	go w.watch(stop)
+	w.win.OnFocus(func() {
+		go w.checkChanges()
+		w.win.Update(w.refreshInboxIfStale)
+	})
+	// openApp runs off the main thread, which alone touches the inbox.
+	w.win.Update(w.loadInbox)
 	w.captureIfAsked()
-	return nil
+	return w
 }
 
 // newWindow makes the state of a window reviewing a source of a
-// repository.
+// repository, or of a window waiting for a pull request, for a nil repo.
 func newWindow(repo *git.Repo, src source) *window {
 	width, shown := state.layout()
+	filesWidth, filesShown := state.filesLayout()
 	w := &window{
 		repo:         repo,
 		launch:       src,
@@ -294,11 +280,11 @@ func newWindow(repo *git.Repo, src source) *window {
 		settings:     cfg.Get(),
 		sidebarShown: shown,
 		sidebarWidth: width,
-		historyLimit: historyPage,
-		viewed:       state.viewed(viewedKey(repo.Root, src)),
+		filesShown:   filesShown,
+		filesWidth:   filesWidth,
+		viewed:       map[string]string{},
 		hscroll:      map[string]float32{},
 		closedDirs:   map[string]bool{},
-		commitTimes:  map[string]commitTime{},
 		reloaded:     map[string]bool{},
 		fileMatches:  map[int]bool{},
 		selFile:      -1,
@@ -306,18 +292,22 @@ func newWindow(repo *git.Repo, src source) *window {
 		prs:          map[source]*pullState{},
 		analyses:     map[source]*analysisState{},
 	}
-	w.gh, _ = findGitHubRemote(repo, github.Repo{})
-	if src.kind == sourcePull {
-		w.pr = w.pullFor(src)
+	if repo != nil {
+		w.viewed = state.viewed(viewedKey(repo.Root, src))
+		w.gh, _ = findGitHubRemote(repo, github.Repo{})
+		if src.kind == sourcePull {
+			w.pr = w.pullFor(src)
+		}
+		w.loadAnalysis(src)
 	}
-	w.loadAnalysis(src)
 	w.dragWidth = w.sidebarWidth
+	w.filesDragWidth = w.filesWidth
 	w.list.Key = func(i int) any { return w.key(&w.rows[i]) }
 	w.list.Header = func(i int) bool { return w.rows[i].kind == rowHeader }
 	return w
 }
 
-// windowTitle is "<repository>[/<source>] · Godiff".
+// windowTitle is "<repository>[/<source>] · GoPR".
 func windowTitle(root string, src source) string {
 	name := filepath.Base(root)
 	switch src.kind {
@@ -329,7 +319,7 @@ func windowTitle(root string, src source) string {
 		_, n := src.pull()
 		name += fmt.Sprintf("/#%d", n)
 	}
-	return name + " · Godiff"
+	return name + " · GoPR"
 }
 
 func shortHash(h string) string {
@@ -402,8 +392,7 @@ func (w *window) splitFile(f *fileState) bool {
 	return !f.oneSided()
 }
 
-// setSource shows another source in the window: at once, with what is
-// known of it, as the commit's message from the history; its changes come
+// setSource shows another source in the window at once; its changes come
 // as they load.
 func (w *window) setSource(src source) {
 	if w.source == src {
@@ -414,20 +403,10 @@ func (w *window) setSource(src source) {
 		log.Printf("switch to %+v", src)
 		go probeMainThread(time.Second)
 	}
-	w.commitOpen = false
 	// The review takes the focus as the window opens only: the user, who
-	// chose this source, keeps the focus where they put it, as on the
-	// history.
+	// chose this source, keeps the focus where they put it.
 	w.focusedOnce = true
 	w.switchTo(src)
-	if src.kind == sourceCommit {
-		for i := range w.history {
-			if w.history[i].Hash == src.ref {
-				c := w.history[i]
-				w.commit = &c
-			}
-		}
-	}
 	w.load()
 }
 
@@ -446,8 +425,10 @@ func (w *window) switchTo(src source) {
 	}
 	if w.viewed == nil {
 		w.viewed = map[string]string{}
-		if key := viewedKey(w.repo.Root, src); key != "" {
-			w.viewed = state.viewed(key)
+		if w.repo != nil {
+			if key := viewedKey(w.repo.Root, src); key != "" {
+				w.viewed = state.viewed(key)
+			}
 		}
 	}
 	w.source = src
@@ -463,9 +444,13 @@ func (w *window) switchTo(src source) {
 	w.list = ui.ListState{Key: w.list.Key, Header: w.list.Header}
 	w.selFile, w.selHunk = -1, -1
 	w.finding, w.query = false, ""
+	// The filter, of the other source's files, would hide the new ones.
+	w.filter = ""
+	w.fileTabs, w.activeTab = nil, 0
+	w.mdSource, w.mdOpts, w.viewer = nil, nil, nil
 	w.hscroll = map[string]float32{}
 	w.current = 0
-	if w.win != nil {
+	if w.win != nil && w.repo != nil {
 		w.win.SetTitle(windowTitle(w.repo.Root, src))
 	}
 }
@@ -478,6 +463,10 @@ const preloadBudget = 80 * time.Millisecond
 // load reads the changes of the source, the contents of the first files
 // within preloadBudget, then the contents of the others.
 func (w *window) load() {
+	if w.repo == nil {
+		return
+	}
+	repo := w.repo
 	w.gen++
 	gen := w.gen
 	src := w.source
@@ -488,8 +477,8 @@ func (w *window) load() {
 	w.loadErr = nil
 	w.changed = false
 	w.genA.Store(int64(gen))
-	// What is known already needs no git: the commit, from the history, and
-	// the branch, which showing a commit does not change.
+	// What is known already needs no git: the commit, and the branch, which
+	// showing a commit does not change.
 	known := w.commit
 	if known != nil && known.Hash != src.ref {
 		known = nil
@@ -518,28 +507,25 @@ func (w *window) load() {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				branch = w.repo.Branch()
+				branch = repo.Branch()
 			}()
 		}
-		sig := ""
 		switch src.kind {
 		case sourceWorkingTree:
-			sig = w.repo.StatusSignature()
-			files, err = w.repo.WorkingTree(opts)
+			files, err = repo.WorkingTree(opts)
 		case sourceCommit:
 			if commit == nil {
 				var c git.Commit
-				c, err = w.repo.CommitInfo(src.ref)
+				c, err = repo.CommitInfo(src.ref)
 				commit = &c
 			}
 			if err == nil {
-				files, err = w.repo.CommitDiff(*commit, opts)
+				files, err = repo.CommitDiff(*commit, opts)
 			}
 		case sourceBranch:
-			sig = w.repo.StatusSignature()
-			files, base, err = w.repo.Compare(src.ref, opts)
+			files, base, err = repo.Compare(src.ref, opts)
 		case sourcePull:
-			pulled, err = w.fetchPull(gen, src, remote, opts)
+			pulled, err = w.fetchPull(gen, repo, src, remote, opts)
 			files, base = pulled.files, pulled.mergeBase
 		}
 		wg.Wait()
@@ -547,7 +533,7 @@ func (w *window) load() {
 		var oldRev, newRev string
 		switch src.kind {
 		case sourceWorkingTree:
-			if w.repo.HasHead() {
+			if repo.HasHead() {
 				oldRev = "HEAD"
 			}
 		case sourceCommit:
@@ -569,7 +555,7 @@ func (w *window) load() {
 				}
 			}
 			if budget := preloadBudget - time.Since(started); budget > 0 {
-				pre = w.preload(fresh, oldRev, newRev, budget)
+				pre = w.preload(repo, fresh, oldRev, newRev, budget)
 			}
 		}
 		w.update(func() {
@@ -586,11 +572,10 @@ func (w *window) load() {
 			if src.kind == sourcePull && err == nil {
 				w.pr.apply(pulled)
 				w.loadReviews()
+				w.loadStack()
 			}
 			w.base = base
-			if sig != "" {
-				w.signature = sig
-			}
+			w.oldRev, w.newRev = oldRev, newRev
 			w.setFiles(files)
 			for _, f := range w.files {
 				if l, ok := pre[f.Path]; ok && !f.loaded {
@@ -598,14 +583,6 @@ func (w *window) load() {
 					l.apply()
 				}
 			}
-			if !w.loadedOnce && len(files) == 0 && src.kind != sourceCommit && src.kind != sourcePull {
-				// Nothing to review: the history shows instead, and takes
-				// the keys in place of the review.
-				w.tab = 1
-				w.focusHistory = w.sidebarShown
-				w.focusedOnce = true
-			}
-			w.loadedOnce = true
 			if err == nil {
 				var rest []*fileState
 				for _, f := range w.files {
@@ -614,7 +591,7 @@ func (w *window) load() {
 					}
 				}
 				if len(rest) > 0 {
-					w.background(func() { w.loadContents(gen, oldRev, newRev, rest) })
+					w.background(func() { w.loadContents(gen, repo, oldRev, newRev, rest) })
 				}
 			}
 		})
@@ -623,11 +600,11 @@ func (w *window) load() {
 
 // preload reads and colors the contents of files, in order, until
 // budget runs out: the files it did not finish load later, as they come.
-func (w *window) preload(files []*diff.File, oldRev, newRev string, budget time.Duration) map[string]loaded {
+func (w *window) preload(repo *git.Repo, files []*diff.File, oldRev, newRev string, budget time.Duration) map[string]loaded {
 	if len(files) == 0 {
 		return nil
 	}
-	contents, err := w.repo.NewContents()
+	contents, err := repo.NewContents()
 	if err != nil {
 		return nil
 	}
@@ -641,7 +618,7 @@ func (w *window) preload(files []*diff.File, oldRev, newRev string, budget time.
 			if stop.Load() {
 				return
 			}
-			l := w.read(contents, f, oldRev, newRev)
+			l := read(repo, contents, f, oldRev, newRev)
 			l.finish()
 			select {
 			case results <- l:
@@ -737,14 +714,14 @@ type loaded struct {
 	path, oldPath      string
 }
 
-// read reads both sides of a file: lines of text, or the data of a
-// picture.
-func (w *window) read(contents *git.Contents, f *diff.File, oldRev, newRev string) loaded {
+// read reads both sides of a file of a repository: lines of text, or the
+// data of a picture.
+func read(repo *git.Repo, contents *git.Contents, f *diff.File, oldRev, newRev string) loaded {
 	l := loaded{path: f.Path, oldPath: f.OldPath}
 	raw := func(rev, path string, limit int) []byte {
 		var data []byte
 		if rev == "" {
-			data = w.repo.ReadWorkTree(path)
+			data = repo.ReadWorkTree(path)
 		} else {
 			data, _ = contents.Read(rev, path)
 		}
@@ -824,9 +801,9 @@ func isImage(path string) bool {
 
 // loadContents reads both sides of the files, for their colors and their
 // unchanged lines, and shows them as they come.
-func (w *window) loadContents(gen int, oldRev, newRev string, files []*fileState) {
+func (w *window) loadContents(gen int, repo *git.Repo, oldRev, newRev string, files []*fileState) {
 	defer boostGC()()
-	contents, err := w.repo.NewContents()
+	contents, err := repo.NewContents()
 	if err != nil {
 		return
 	}
@@ -853,7 +830,7 @@ func (w *window) loadContents(gen int, oldRev, newRev string, files []*fileState
 			if w.stale(gen) {
 				return
 			}
-			job := w.read(contents, f.File, oldRev, newRev)
+			job := read(repo, contents, f.File, oldRev, newRev)
 			job.file = f
 			jobs <- job
 		}
@@ -930,93 +907,53 @@ func (w *window) stale(gen int) bool { return w.genA.Load() != int64(gen) }
 // loadUser reads the name of the git user, which comments show, off the
 // main thread: running git takes a while.
 func (w *window) loadUser() {
+	repo := w.repo
+	if repo == nil {
+		return
+	}
 	w.background(func() {
-		name := strings.TrimSpace(w.repo.ConfigValue("user.name"))
+		name := strings.TrimSpace(repo.ConfigValue("user.name"))
 		if name == "" {
-			name = strings.TrimSpace(w.repo.ConfigValue("user.email"))
-		}
-		w.update(func() { w.user = name })
-	})
-}
-
-// loadHistory reads the commits of the History tab.
-func (w *window) loadHistory() {
-	limit := w.historyLimit
-	w.historyLoading = true
-	w.background(func() {
-		commits, err := w.repo.Log(0, limit)
-		if err != nil {
-			commits = nil
+			name = strings.TrimSpace(repo.ConfigValue("user.email"))
 		}
 		w.update(func() {
-			w.history = commits
-			w.historyMore = len(commits) >= limit
-			w.historyLoading = false
+			if w.repo == repo {
+				w.user = name
+			}
 		})
 	})
 }
 
-// watch notices changes of the work tree, polling as codiff does: often
-// while the window has the focus, rarely while it is in the background.
-func (w *window) watch(stop chan struct{}) {
-	for {
-		delay := 10 * time.Second
-		if w.win.IsFocused() {
-			delay = 2500 * time.Millisecond
-		} else if !w.win.IsVisible() || w.win.IsMinimized() {
-			delay = 30 * time.Second
-		}
-		select {
-		case <-stop:
-			return
-		case <-time.After(delay):
-		}
-		w.checkChanges()
-	}
-}
-
-// checkChanges compares the work tree with what the window shows.
+// checkChanges asks GitHub whether the pull request shown has new
+// commits. It runs off the main thread.
 func (w *window) checkChanges() {
 	var src source
-	var sig string
 	var busy bool
-	mygo.RunOnMain(func() { src, sig, busy = w.source, w.signature, w.loading || w.changed })
+	mygo.RunOnMain(func() { src, busy = w.source, w.loading || w.changed })
 	if src.kind == sourcePull && !busy {
 		w.checkPull(src)
-		return
-	}
-	if busy || sig == "" || src.kind == sourceCommit {
-		return
-	}
-	if now := w.repo.StatusSignature(); now != sig {
-		w.win.Update(func() {
-			if w.source == src && !w.loading {
-				w.changed = true
-			}
-		})
 	}
 }
 
-// refresh loads the source again, and the history, and the pull
-// requests once listed.
+// refresh loads the source again.
 func (w *window) refresh() {
 	w.load()
-	w.loadHistory()
-	if w.pullsLoaded {
-		w.loadPulls()
-	}
 }
 
 // openInEditor opens a file of the repository in the user's editor, at a
 // line.
 func (w *window) openInEditor(path string, line int) {
-	abs := filepath.Join(w.repo.Root, filepath.FromSlash(path))
+	if w.repo == nil {
+		return
+	}
+	root, command := w.repo.Root, w.settings.EditorCommand
+	abs := filepath.Join(root, filepath.FromSlash(path))
 	if _, err := os.Stat(abs); err != nil {
-		abs = w.repo.Root
+		abs = root
 		line = 0
 	}
 	go func() {
-		if err := openEditor(w.settings.EditorCommand, w.repo.Root, abs, line); err != nil {
+		if err := openEditor(command, root, abs, line); err != nil {
 			mygo.Dialog.Error("Could not open the file", err.Error())
 		}
 	}()

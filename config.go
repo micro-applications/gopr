@@ -15,11 +15,19 @@ import (
 	"github.com/egoist/mygo"
 )
 
-// Settings are the user's preferences, in ~/.godiff/godiff.jsonc as
+// Settings are the user's preferences, in ~/.gopr/gopr.jsonc as
 // codiff keeps its own in ~/.codiff/codiff.jsonc.
 type Settings struct {
-	CodeFontFamily      string `json:"codeFontFamily"`
-	CodeFontSize        int    `json:"codeFontSize"`
+	CodeFontFamily string `json:"codeFontFamily"`
+	CodeFontSize   int    `json:"codeFontSize"`
+	// UIFontFamily is the family of the window's text, the system's when
+	// empty; MarkdownFontFamily that of Markdown's (previews, descriptions,
+	// reviews and comments), the window's when empty.
+	UIFontFamily       string `json:"uiFontFamily"`
+	MarkdownFontFamily string `json:"markdownFontFamily"`
+	// CloneRoot is where pull requests' repositories are cloned, as
+	// <cloneRoot>/<owner>/<name>, and looked for, when not opened before.
+	CloneRoot           string `json:"cloneRoot"`
 	CopyCommentsOnClose bool   `json:"copyCommentsOnClose"`
 	DiffStyle           string `json:"diffStyle"` // split or unified
 	EditorCommand       string `json:"editorCommand"`
@@ -31,22 +39,34 @@ type Settings struct {
 	// providers, as the AI Review card chooses it; empty for its own
 	// default, which for OpenCode is the one its own interface starts
 	// with.
-	AIAgent              string `json:"aiAgent"`
-	AIModel              string `json:"aiModel"`
+	AIAgent string `json:"aiAgent"`
+	AIModel string `json:"aiModel"`
+	// MarkdownWidth is how wide Markdown previews read at most: narrow,
+	// medium, wide or full.
+	MarkdownWidth string `json:"markdownWidth"`
+	// MarkdownFontSize is the size of Markdown previews' text.
+	MarkdownFontSize     int    `json:"markdownFontSize"`
 	ReviewCommentsPrefix string `json:"reviewCommentsPrefix"`
 	SidebarPosition      string `json:"sidebarPosition"` // left or right
 	ShowWhitespace       bool   `json:"showWhitespace"`
 	Theme                string `json:"theme"` // system, light or dark
 	WordWrap             bool   `json:"wordWrap"`
+	// Zoom is how large the window shows everything, 1 for 100%: ⌘+ and
+	// ⌘- step it.
+	Zoom float64 `json:"zoom"`
 }
 
 func defaultSettings() Settings {
 	return Settings{
+		CloneRoot:            "~/Projects",
 		CodeFontSize:         13,
 		DiffStyle:            "split",
+		MarkdownWidth:        "medium",
+		MarkdownFontSize:     defaultMarkdownFontSize,
 		ReviewCommentsPrefix: "# Address these Review Comments",
 		SidebarPosition:      "left",
 		Theme:                "system",
+		Zoom:                 1,
 	}
 }
 
@@ -54,12 +74,29 @@ func defaultSettings() Settings {
 func (s *Settings) normalize() {
 	d := defaultSettings()
 	s.CodeFontFamily = strings.TrimSpace(s.CodeFontFamily)
+	s.UIFontFamily = strings.TrimSpace(s.UIFontFamily)
+	s.MarkdownFontFamily = strings.TrimSpace(s.MarkdownFontFamily)
+	s.CloneRoot = strings.TrimSpace(s.CloneRoot)
+	if s.CloneRoot == "" {
+		s.CloneRoot = d.CloneRoot
+	}
 	if s.CodeFontSize == 0 {
 		s.CodeFontSize = d.CodeFontSize
 	}
 	s.CodeFontSize = min(max(s.CodeFontSize, 10), 32)
 	if s.DiffStyle != "split" && s.DiffStyle != "unified" {
 		s.DiffStyle = d.DiffStyle
+	}
+	if s.MarkdownFontSize == 0 {
+		s.MarkdownFontSize = d.MarkdownFontSize
+	}
+	s.MarkdownFontSize = min(max(s.MarkdownFontSize, minMarkdownFontSize), maxMarkdownFontSize)
+	if s.Zoom == 0 {
+		s.Zoom = d.Zoom
+	}
+	s.Zoom = min(max(s.Zoom, zoomLevels[0]), zoomLevels[len(zoomLevels)-1])
+	if markdownWidthOf(s.MarkdownWidth) == nil {
+		s.MarkdownWidth = d.MarkdownWidth
 	}
 	if s.SidebarPosition != "left" && s.SidebarPosition != "right" {
 		s.SidebarPosition = d.SidebarPosition
@@ -77,6 +114,20 @@ func (s *Settings) normalize() {
 	}
 }
 
+// cloneRoot is the directory repositories are cloned into, with ~ expanded.
+func (s Settings) cloneRoot() string {
+	root := s.CloneRoot
+	if root == "" {
+		root = defaultSettings().CloneRoot
+	}
+	if root == "~" || strings.HasPrefix(root, "~/") || strings.HasPrefix(root, `~\`) {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, root[1:])
+		}
+	}
+	return root
+}
+
 // config holds the settings, shared by the windows, and keeps them in
 // step with the file.
 type config struct {
@@ -92,9 +143,18 @@ var cfg = newConfig()
 
 func newConfig() *config {
 	home, _ := os.UserHomeDir()
-	c := &config{path: filepath.Join(home, ".godiff", "godiff.jsonc"), settings: defaultSettings()}
+	c := &config{path: filepath.Join(home, ".gopr", "gopr.jsonc"), settings: defaultSettings()}
 	c.load()
 	return c
+}
+
+// migrateConfig copies the Godiff settings file to the GoPR one, once, and
+// loads it. It runs from main, not at package init, so tests never touch
+// the real home directory.
+func (c *config) migrateConfig() {
+	home, _ := os.UserHomeDir()
+	migrateFile(c.path, filepath.Join(home, ".godiff", "godiff.jsonc"))
+	c.load()
 }
 
 func (c *config) Get() Settings {
@@ -163,7 +223,7 @@ func (c *config) load() bool {
 		Settings json.RawMessage `json:"settings"`
 	}
 	if err := json.Unmarshal(stripJSONC(data), &file); err != nil {
-		log.Printf("godiff: %s: %v", c.path, err)
+		log.Printf("gopr: %s: %v", c.path, err)
 		return false
 	}
 	s := defaultSettings()
@@ -190,7 +250,7 @@ func (c *config) write(s Settings) {
 		return
 	}
 	if err := os.WriteFile(c.path, append(data, '\n'), 0o644); err != nil {
-		log.Printf("godiff: %v", err)
+		log.Printf("gopr: %v", err)
 		return
 	}
 	if fi, err := os.Stat(c.path); err == nil {
@@ -274,6 +334,9 @@ type store struct {
 	mu   sync.Mutex
 	path string
 	data storeData
+	// saveMu keeps saves in order: the last snapshot taken is the last
+	// written.
+	saveMu sync.Mutex
 }
 
 type storeData struct {
@@ -282,15 +345,27 @@ type storeData struct {
 	Viewed       map[string]map[string]string `json:"viewed"`
 	SidebarWidth float32                      `json:"sidebarWidth"`
 	SidebarShown *bool                        `json:"sidebarShown"`
-	// Recent are the repositories opened, the last first: File → Open
-	// Recent lists them, and the app opens the first when started without
-	// one, from the Dock.
+	// FilesWidth and FilesShown are the layout of the files pane.
+	FilesWidth float32 `json:"filesWidth"`
+	FilesShown *bool   `json:"filesShown"`
+	// Recent are the repositories opened, the last first: the app opens
+	// the first when started without one, from the Dock.
 	Recent []string `json:"recent"`
+	// Clones maps the lowercase owner/name of a GitHub repository to the
+	// local clone chosen for it.
+	Clones map[string]string `json:"clones"`
 	// LastRepository is the repository opened last, as kept before Recent.
 	LastRepository string `json:"lastRepository,omitempty"`
+	// InboxDays is the period of the inbox, in days: 7 or 30.
+	InboxDays int `json:"inboxDays,omitempty"`
+	// InboxHidden are the organizations, and the viewer's login, unchecked
+	// in the inbox's menu.
+	InboxHidden []string `json:"inboxHidden,omitempty"`
+	// InboxCollapsed are the sections of the inbox collapsed: mine, review.
+	InboxCollapsed []string `json:"inboxCollapsed,omitempty"`
 }
 
-// maxRecent is how many repositories File → Open Recent lists.
+// maxRecent is how many repositories the store remembers.
 const maxRecent = 10
 
 var state = &store{}
@@ -301,11 +376,17 @@ func (s *store) open() {
 		return
 	}
 	s.path = filepath.Join(dir, "state.json")
+	migrateFile(s.path, filepath.Join(filepath.Dir(dir), "Godiff", "state.json"))
+	// The AI reviews saved, which analysisPath keeps beside the state.
+	migrateDir(filepath.Join(dir, "analyses"), filepath.Join(filepath.Dir(dir), "Godiff", "analyses"))
 	if data, err := os.ReadFile(s.path); err == nil {
 		json.Unmarshal(data, &s.data)
 	}
 	if s.data.Viewed == nil {
 		s.data.Viewed = map[string]map[string]string{}
+	}
+	if s.data.Clones == nil {
+		s.data.Clones = map[string]string{}
 	}
 	if len(s.data.Recent) == 0 && s.data.LastRepository != "" {
 		s.data.Recent = []string{s.data.LastRepository}
@@ -362,6 +443,27 @@ func (s *store) setLayout(width float32, shown bool) {
 	s.save()
 }
 
+// filesLayout returns the width of the files pane, and whether it shows.
+func (s *store) filesLayout() (width float32, shown bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	width, shown = s.data.FilesWidth, true
+	if width == 0 {
+		width = filesDefault
+	}
+	if s.data.FilesShown != nil {
+		shown = *s.data.FilesShown
+	}
+	return
+}
+
+func (s *store) setFilesLayout(width float32, shown bool) {
+	s.mu.Lock()
+	s.data.FilesWidth, s.data.FilesShown = width, &shown
+	s.mu.Unlock()
+	s.save()
+}
+
 // recent returns the repositories opened, the last first.
 func (s *store) recent() []string {
 	s.mu.Lock()
@@ -385,21 +487,91 @@ func (s *store) addRecent(root string) bool {
 	return true
 }
 
-func (s *store) clearRecent() {
+// inboxDays is the period of the inbox: 7 days unless 30 were chosen.
+func (s *store) inboxDays() int {
 	s.mu.Lock()
-	s.data.Recent = nil
+	defer s.mu.Unlock()
+	if s.data.InboxDays == 30 {
+		return 30
+	}
+	return 7
+}
+
+func (s *store) setInboxDays(days int) {
+	s.mu.Lock()
+	s.data.InboxDays = days
 	s.mu.Unlock()
 	s.save()
 }
 
+// inboxHidden returns the owners unchecked in the inbox's menu.
+func (s *store) inboxHidden() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.data.InboxHidden)
+}
+
+func (s *store) setInboxHidden(hidden []string) {
+	s.mu.Lock()
+	s.data.InboxHidden = slices.Clone(hidden)
+	s.mu.Unlock()
+	s.save()
+}
+
+// inboxCollapsed reports whether a section of the inbox, mine or review, is
+// collapsed.
+func (s *store) inboxCollapsed(section string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Contains(s.data.InboxCollapsed, section)
+}
+
+func (s *store) setInboxCollapsed(section string, collapsed bool) {
+	s.mu.Lock()
+	list := slices.DeleteFunc(slices.Clone(s.data.InboxCollapsed), func(k string) bool { return k == section })
+	if collapsed {
+		list = append(list, section)
+	}
+	s.data.InboxCollapsed = list
+	s.mu.Unlock()
+	s.save()
+}
+
+// save writes the store, whole: to a file beside it, then in its place,
+// so that a save cut short, or another made at once, leaves no half of it.
 func (s *store) save() {
 	if s.path == "" {
 		return
 	}
+	s.saveMu.Lock()
+	defer s.saveMu.Unlock()
 	s.mu.Lock()
 	data, err := json.Marshal(s.data)
 	s.mu.Unlock()
 	if err == nil {
-		os.WriteFile(s.path, data, 0o644)
+		writeFileAtomic(s.path, data)
 	}
+}
+
+// writeFileAtomic writes a file through a temporary one in its directory,
+// renamed over it.
+func writeFileAtomic(path string, data []byte) error {
+	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(data)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Chmod(f.Name(), 0o644)
+	}
+	if err == nil {
+		err = os.Rename(f.Name(), path)
+	}
+	if err != nil {
+		os.Remove(f.Name())
+	}
+	return err
 }
