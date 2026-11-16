@@ -23,7 +23,10 @@ type Settings struct {
 	// UIFontFamily is the family of the window's text, the system's when
 	// empty; MarkdownFontFamily that of Markdown's (previews, descriptions,
 	// reviews and comments), the window's when empty.
-	UIFontFamily       string `json:"uiFontFamily"`
+	UIFontFamily string `json:"uiFontFamily"`
+	// UIFontSize is the size of the window's text; its smaller and larger
+	// text keep their proportions to it.
+	UIFontSize         int    `json:"uiFontSize"`
 	MarkdownFontFamily string `json:"markdownFontFamily"`
 	// CloneRoot is where pull requests' repositories are cloned, as
 	// <cloneRoot>/<owner>/<name>, and looked for, when not opened before.
@@ -67,6 +70,7 @@ func defaultSettings() Settings {
 		SidebarPosition:      "left",
 		Theme:                "system",
 		Zoom:                 1,
+		UIFontSize:           13,
 	}
 }
 
@@ -91,6 +95,10 @@ func (s *Settings) normalize() {
 		s.MarkdownFontSize = d.MarkdownFontSize
 	}
 	s.MarkdownFontSize = min(max(s.MarkdownFontSize, minMarkdownFontSize), maxMarkdownFontSize)
+	if s.UIFontSize == 0 {
+		s.UIFontSize = d.UIFontSize
+	}
+	s.UIFontSize = min(max(s.UIFontSize, 10), 24)
 	if s.Zoom == 0 {
 		s.Zoom = d.Zoom
 	}

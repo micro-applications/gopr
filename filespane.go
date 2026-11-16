@@ -43,9 +43,9 @@ func (w *window) filesFooter(c *ui.Context, pal *palette) {
 	}
 	ui.Row(c).MinHeight(40).Padding(6, 10).Gap(6).BorderWidth(1, 0, 0, 0).BorderColor(pal.cardBorder).
 		Tooltip("Total change: " + lines(adds, "added") + ", " + lines(dels, "removed")).Children(func() {
-		ui.Text(c, "Total:").FontSize(11).FontWeight(600).TextColor(t.TextMuted)
-		ui.Text(c, "+"+thousands(adds)).FontFeatures("tnum").FontSize(11).FontWeight(500).TextColor(pal.addText)
-		ui.Text(c, "−"+thousands(dels)).FontFeatures("tnum").FontSize(11).FontWeight(500).TextColor(pal.delText)
+		ui.Text(c, "Total:").FontSize(em(c, 11)).FontWeight(600).TextColor(t.TextMuted)
+		ui.Text(c, "+"+thousands(adds)).FontFeatures("tnum").FontSize(em(c, 11)).FontWeight(500).TextColor(pal.addText)
+		ui.Text(c, "−"+thousands(dels)).FontFeatures("tnum").FontSize(em(c, 11)).FontWeight(500).TextColor(pal.delText)
 	})
 }
 

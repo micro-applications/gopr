@@ -151,3 +151,13 @@ func TestStoreSaveReplacesFile(t *testing.T) {
 		t.Errorf("files left: %v", entries)
 	}
 }
+
+func TestUIFontSize(t *testing.T) {
+	for _, tc := range []struct{ in, want int }{{0, 13}, {5, 10}, {15, 15}, {40, 24}} {
+		s := Settings{UIFontSize: tc.in}
+		s.normalize()
+		if s.UIFontSize != tc.want {
+			t.Errorf("uiFontSize %d normalized to %d, want %d", tc.in, s.UIFontSize, tc.want)
+		}
+	}
+}

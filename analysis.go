@@ -267,8 +267,8 @@ func (w *window) summaryCard(c *ui.Context, pal *palette) ui.Element {
 	st := w.analyses[w.source]
 	return ui.Column(c).Padding(12, 16).Gap(8).Radius(cardRadius).Background(pal.headerBg).Border(1, t.Accent.Alpha(0.3)).Children(func() {
 		ui.Row(c).Gap(8).Children(func() {
-			ui.Icon(c, iconSparkle).FontSize(15).TextColor(t.Accent)
-			ui.Text(c, "AI Review").FontSize(14).Bold().Shrink(0)
+			ui.Icon(c, iconSparkle).FontSize(em(c, 15)).TextColor(t.Accent)
+			ui.Text(c, "AI Review").FontSize(em(c, 14)).Bold().Shrink(0)
 			if a := st.result; a != nil && !st.running {
 				by := a.Agent
 				if ag, ok := agent.ByName(a.Agent); ok {
@@ -278,7 +278,7 @@ func (w *window) summaryCard(c *ui.Context, pal *palette) ui.Element {
 					by += " · " + a.Model
 				}
 				by += " · " + relativeTime(w.now, a.GeneratedAt)
-				ui.Text(c, by).FontSize(11).TextColor(t.TextMuted).SingleLine().Shrink(1).MinWidth(0)
+				ui.Text(c, by).FontSize(em(c, 11)).TextColor(t.TextMuted).SingleLine().Shrink(1).MinWidth(0)
 			}
 			ui.Spacer(c)
 			if st.result == nil && !st.running && st.err == "" {
@@ -299,7 +299,7 @@ func (w *window) summaryCard(c *ui.Context, pal *palette) ui.Element {
 			}
 			if st.running {
 				if ui.Button(c, "").Height(26).Children(func() {
-					ui.Icon(c, iconStop).FontSize(12)
+					ui.Icon(c, iconStop).FontSize(em(c, 12))
 					ui.Text(c, "Stop")
 				}).Clicked() {
 					w.stopAnalysis()
@@ -333,9 +333,9 @@ func (w *window) summaryCard(c *ui.Context, pal *palette) ui.Element {
 				if who == "" {
 					who = "The agent"
 				}
-				ui.Text(c, who+": "+st.progress).FontSize(12).TextColor(t.TextMuted).SingleLine().Grow(1).Shrink(1).MinWidth(0)
+				ui.Text(c, who+": "+st.progress).FontSize(em(c, 12)).TextColor(t.TextMuted).SingleLine().Grow(1).Shrink(1).MinWidth(0)
 				elapsed := w.now.Sub(st.started).Truncate(time.Second)
-				ui.Text(c, elapsed.String()).FontFeatures("tnum").FontSize(11).TextColor(t.TextMuted).Shrink(0)
+				ui.Text(c, elapsed.String()).FontFeatures("tnum").FontSize(em(c, 11)).TextColor(t.TextMuted).Shrink(0)
 				c.After(time.Second)
 			})
 		}
@@ -344,35 +344,35 @@ func (w *window) summaryCard(c *ui.Context, pal *palette) ui.Element {
 				FontSize(13).TextColor(t.TextMuted)
 		}
 		if st.err != "" {
-			ui.Text(c, st.err).FontSize(12).TextColor(t.Danger).Selectable().MaxLines(6)
+			ui.Text(c, st.err).FontSize(em(c, 12)).TextColor(t.Danger).Selectable().MaxLines(6)
 		}
 		a := st.result
 		if a == nil || st.folded || st.running {
 			return
 		}
 		if s := strings.TrimSpace(a.OverallSummary); s != "" {
-			ui.Text(c, s).FontSize(13).Selectable()
+			ui.Text(c, s).FontSize(em(c, 13)).Selectable()
 		}
 		notes := 0
 		for _, g := range a.Groups {
 			notes += len(g.FileNotes) + len(g.LineNotes)
 		}
 		ui.Row(c).Gap(10).Children(func() {
-			ui.Textf(c, "%s · %s", plural(len(a.Groups), "group"), plural(notes, "note")).FontSize(12).TextColor(t.TextMuted)
+			ui.Textf(c, "%s · %s", plural(len(a.Groups), "group"), plural(notes, "note")).FontSize(em(c, 12)).TextColor(t.TextMuted)
 			if n := a.Critical(); n > 0 {
 				ui.Row(c).Gap(4).Children(func() {
-					ui.Icon(c, iconAlert).FontSize(12).TextColor(t.Danger)
-					ui.Textf(c, "%d to take care with", n).FontSize(12).FontWeight(600).TextColor(t.Danger)
+					ui.Icon(c, iconAlert).FontSize(em(c, 12)).TextColor(t.Danger)
+					ui.Textf(c, "%d to take care with", n).FontSize(em(c, 12)).FontWeight(600).TextColor(t.Danger)
 				})
 			}
 			if n := w.changedSince(st); n > 0 {
-				ui.Textf(c, "%s changed since", plural(n, "file")).FontSize(12).TextColor(pal.ref).
+				ui.Textf(c, "%s changed since", plural(n, "file")).FontSize(em(c, 12)).TextColor(pal.ref).
 					Tooltip("Notes on the files changed since do not show. Review again to include them.")
 			}
 			ui.Spacer(c)
 			if w.grouping() != groupAI {
 				b := ui.ButtonBase(c).Children(func() {
-					ui.Text(c, "Group files by this review").FontSize(12).FontWeight(600).TextColor(t.Accent)
+					ui.Text(c, "Group files by this review").FontSize(em(c, 12)).FontWeight(600).TextColor(t.Accent)
 				})
 				if b.Clicked() {
 					w.setGrouping(groupAI)
@@ -417,9 +417,9 @@ func (w *window) noteList(c *ui.Context, pal *palette, st *analysisState) {
 			}
 			b.Children(func() {
 				ui.Row(c).Gap(8).Grow(1).MinWidth(0).Children(func() {
-					ui.Icon(c, icon).FontSize(12).TextColor(accent).Shrink(0)
-					ui.Text(c, where).Font(w.codeFont()).FontSize(11).TextColor(t.TextMuted).SingleLine().Shrink(0).MaxWidth(260)
-					ui.Text(c, n.text).FontSize(12).SingleLine().Grow(1).Shrink(1).MinWidth(0)
+					ui.Icon(c, icon).FontSize(em(c, 12)).TextColor(accent).Shrink(0)
+					ui.Text(c, where).Font(w.codeFont()).FontSize(em(c, 11)).TextColor(t.TextMuted).SingleLine().Shrink(0).MaxWidth(260)
+					ui.Text(c, n.text).FontSize(em(c, 12)).SingleLine().Grow(1).Shrink(1).MinWidth(0)
 				})
 			})
 			if b.Clicked() {
@@ -432,7 +432,7 @@ func (w *window) noteList(c *ui.Context, pal *palette, st *analysisState) {
 				label = "Show fewer"
 			}
 			b := ui.ButtonBase(c).Padding(4, 8).Children(func() {
-				ui.Text(c, label).FontSize(12).FontWeight(600).TextColor(t.Accent)
+				ui.Text(c, label).FontSize(em(c, 12)).FontWeight(600).TextColor(t.Accent)
 			})
 			if b.Clicked() {
 				st.allNotes = !st.allNotes

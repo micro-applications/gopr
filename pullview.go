@@ -45,33 +45,33 @@ func pullRow(c *ui.Context, w *window, pal *palette, p *github.Summary, repo str
 		if selected {
 			color = t.AccentText
 		}
-		ui.Icon(c, icon).FontSize(14).TextColor(color).Margin(1, 0, 0).Shrink(0)
+		ui.Icon(c, icon).FontSize(em(c, 14)).TextColor(color).Margin(1, 0, 0).Shrink(0)
 		ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
-			ui.Text(c, p.Title).FontSize(12).FontWeight(500).MaxLines(2)
+			ui.Text(c, p.Title).FontSize(em(c, 12)).FontWeight(500).MaxLines(2)
 			// The repository by its name alone (the tooltip has its owner),
 			// the author unless it is the viewer, and how long ago.
 			ui.Row(c).Gap(4).Children(func() {
-				dot := func() { ui.Text(c, "·").FontSize(10).TextColor(muted).Shrink(0) }
+				dot := func() { ui.Text(c, "·").FontSize(em(c, 10)).TextColor(muted).Shrink(0) }
 				if repo != "" {
 					name := repo
 					if i := strings.LastIndexByte(repo, '/'); i >= 0 {
 						name = repo[i+1:]
 					}
-					ui.Text(c, name).FontSize(10).TextColor(muted).SingleLine().Shrink(1).MinWidth(0)
+					ui.Text(c, name).FontSize(em(c, 10)).TextColor(muted).SingleLine().Shrink(1).MinWidth(0)
 				}
-				ui.Textf(c, "#%d", p.Number).FontSize(10).TextColor(ref).Shrink(0)
+				ui.Textf(c, "#%d", p.Number).FontSize(em(c, 10)).TextColor(ref).Shrink(0)
 				if author {
 					dot()
-					ui.Text(c, p.Author.Login).FontSize(10).TextColor(muted).SingleLine().Shrink(1).MinWidth(0)
+					ui.Text(c, p.Author.Login).FontSize(em(c, 10)).TextColor(muted).SingleLine().Shrink(1).MinWidth(0)
 				}
 				dot()
-				ui.Text(c, relativeTime(w.now, p.UpdatedAt)).FontSize(10).TextColor(muted).Shrink(0)
+				ui.Text(c, relativeTime(w.now, p.UpdatedAt)).FontSize(em(c, 10)).TextColor(muted).Shrink(0)
 				ui.Spacer(c)
 				switch p.ReviewDecision {
 				case "approved":
-					ui.Icon(c, iconCheck).FontSize(12).TextColor(pickColor(selected, t.AccentText, pal.addBar)).Tooltip("Approved").Shrink(0)
+					ui.Icon(c, iconCheck).FontSize(em(c, 12)).TextColor(pickColor(selected, t.AccentText, pal.addBar)).Tooltip("Approved").Shrink(0)
 				case "changes_requested":
-					ui.Icon(c, iconXCircle).FontSize(12).TextColor(pickColor(selected, t.AccentText, t.Danger)).Tooltip("Changes requested").Shrink(0)
+					ui.Icon(c, iconXCircle).FontSize(em(c, 12)).TextColor(pickColor(selected, t.AccentText, t.Danger)).Tooltip("Changes requested").Shrink(0)
 				}
 				// Passing checks are the usual case: a dot marks the others.
 				if p.Checks != "" && p.Checks != "success" {
@@ -114,8 +114,8 @@ func stateBadge(c *ui.Context, pal *palette, m *github.PullRequest) ui.Element {
 		icon, color = iconPullClosed, t.Danger
 	}
 	return ui.Row(c).Gap(5).Padding(4, 10, 4, 8).Radius(14).Background(color).TextColor(ui.RGB(255, 255, 255)).Shrink(0).Children(func() {
-		ui.Icon(c, icon).FontSize(13)
-		ui.Text(c, status).FontSize(12).FontWeight(700)
+		ui.Icon(c, icon).FontSize(em(c, 13))
+		ui.Text(c, status).FontSize(em(c, 12)).FontWeight(700)
 	})
 }
 
@@ -145,7 +145,7 @@ func (w *window) pullHeader(c *ui.Context, pal *palette) ui.Element {
 				ui.RichText(c,
 					ui.Span{Text: m.Title, Weight: 700},
 					ui.Span{Text: fmt.Sprintf("  #%d", m.Number), Color: t.TextMuted},
-				).FontSize(15).Selectable()
+				).FontSize(em(c, 15)).Selectable()
 				ui.Row(c).Gap(6).Children(func() {
 					avatar(c, m.User, 18)
 					verb := fmt.Sprintf(" wants to merge %s into ", plural(m.Commits, "commit"))
@@ -159,7 +159,7 @@ func (w *window) pullHeader(c *ui.Context, pal *palette) ui.Element {
 						ui.Span{Text: " from ", Color: t.TextMuted},
 						ui.Span{Text: m.Head.Label, Font: w.codeFont(), Color: pal.ref},
 						ui.Span{Text: ago(w.now, m.CreatedAt), Color: t.TextMuted},
-					).FontSize(12).Shrink(1).MinWidth(0).Tooltip("Opened " + m.CreatedAt.Local().Format("Mon Jan 2 15:04 2006"))
+					).FontSize(em(c, 12)).Shrink(1).MinWidth(0).Tooltip("Opened " + m.CreatedAt.Local().Format("Mon Jan 2 15:04 2006"))
 				})
 			})
 			if iconButton(c, iconCopy, "Copy link").Clicked() {
@@ -175,7 +175,7 @@ func (w *window) pullHeader(c *ui.Context, pal *palette) ui.Element {
 				ui.Span{Text: "+" + thousands(m.Additions), Color: pal.addText},
 				ui.Span{Text: " −" + thousands(m.Deletions), Color: pal.delText},
 				ui.Span{Text: " · " + plural(m.ChangedFiles, "file"), Color: t.TextMuted},
-			).FontFeatures("tnum").FontSize(12).FontWeight(600)
+			).FontFeatures("tnum").FontSize(em(c, 12)).FontWeight(600)
 			if r := p.reviews; r != nil && len(r.Threads) > 0 {
 				open := 0
 				for _, th := range r.Threads {
@@ -183,7 +183,7 @@ func (w *window) pullHeader(c *ui.Context, pal *palette) ui.Element {
 						open++
 					}
 				}
-				ui.Textf(c, "%s · %d unresolved", plural(len(r.Threads), "thread"), open).FontSize(12).TextColor(t.TextMuted)
+				ui.Textf(c, "%s · %d unresolved", plural(len(r.Threads), "thread"), open).FontSize(em(c, 12)).TextColor(t.TextMuted)
 			}
 			if p.reviewsLoading {
 				ui.Spinner(c).Size(12, 12)
@@ -219,7 +219,7 @@ func (w *window) pullHeader(c *ui.Context, pal *palette) ui.Element {
 						label = "Show less"
 					}
 					b := ui.ButtonBase(c).AlignSelf(ui.Start).Children(func() {
-						ui.Text(c, label).FontSize(12).FontWeight(600).TextColor(t.Accent)
+						ui.Text(c, label).FontSize(em(c, 12)).FontWeight(600).TextColor(t.Accent)
 					})
 					if b.Clicked() {
 						p.descOpen = !p.descOpen
@@ -240,8 +240,8 @@ func (w *window) pullHeader(c *ui.Context, pal *palette) ui.Element {
 		}
 		hint := func(icon *ui.SVG, text string, color ui.Color, dismiss func()) {
 			ui.Row(c).Gap(8).Padding(6, 6, 6, 10).Radius(8).Background(color.Alpha(0.08)).Children(func() {
-				ui.Icon(c, icon).FontSize(14).TextColor(color)
-				ui.Text(c, text).FontSize(12).TextColor(color.Mix(t.Text, 0.4)).Grow(1).Shrink(1).MinWidth(0).Selectable()
+				ui.Icon(c, icon).FontSize(em(c, 14)).TextColor(color)
+				ui.Text(c, text).FontSize(em(c, 12)).TextColor(color.Mix(t.Text, 0.4)).Grow(1).Shrink(1).MinWidth(0).Selectable()
 				if dismiss != nil && iconButton(c, iconClose, "Dismiss").Size(22, 22).Clicked() {
 					dismiss()
 				}
@@ -274,13 +274,13 @@ func (w *window) reviewSummary(c *ui.Context, pal *palette, s github.ReviewSumma
 	}
 	ui.Column(c).Gap(4).Children(func() {
 		ui.Row(c).Gap(6).Children(func() {
-			ui.Icon(c, icon).FontSize(14).TextColor(color)
+			ui.Icon(c, icon).FontSize(em(c, 14)).TextColor(color)
 			avatar(c, s.Author, 18)
 			ui.RichText(c,
 				ui.Span{Text: s.Author.Login, Weight: 600},
 				ui.Span{Text: " " + verdict, Color: color},
 				ui.Span{Text: ago(w.now, s.SubmittedAt), Color: t.TextMuted},
-			).FontSize(12)
+			).FontSize(em(c, 12))
 		})
 		if body := plainBody(s.Body); body != "" {
 			ui.Column(c).Padding(0, 0, 0, 44).Label("Review").Children(func() {
@@ -339,10 +339,10 @@ func (w *window) threadRow(c *ui.Context, pal *palette, f *fileState, th *github
 				head.BorderWidth(0, 0, 1, 0).BorderColor(pal.cardBorder)
 			}
 			head.Children(func() {
-				ui.Icon(c, iconComment).FontSize(13).TextColor(t.TextMuted)
-				ui.Text(c, threadLabel(th)).FontSize(11).FontWeight(600).TextColor(t.TextMuted).Shrink(0)
+				ui.Icon(c, iconComment).FontSize(em(c, 13)).TextColor(t.TextMuted)
+				ui.Text(c, threadLabel(th)).FontSize(em(c, 11)).FontWeight(600).TextColor(t.TextMuted).Shrink(0)
 				badge := func(text string, color ui.Color) {
-					ui.Text(c, text).FontSize(10).FontWeight(700).Padding(1, 6).Radius(8).Background(color.Alpha(0.14)).TextColor(color).Shrink(0)
+					ui.Text(c, text).FontSize(em(c, 10)).FontWeight(700).Padding(1, 6).Radius(8).Background(color.Alpha(0.14)).TextColor(color).Shrink(0)
 				}
 				if th.Pending {
 					badge("Pending", pal.ref)
@@ -358,7 +358,7 @@ func (w *window) threadRow(c *ui.Context, pal *palette, f *fileState, th *github
 					ui.RichText(c,
 						ui.Span{Text: first.Author.Login + " ", Weight: 600},
 						ui.Span{Text: headLine(plainBody(first.Body)), Color: t.TextMuted},
-					).FontSize(12).SingleLine().Grow(1).Shrink(1).MinWidth(0)
+					).FontSize(em(c, 12)).SingleLine().Grow(1).Shrink(1).MinWidth(0)
 				} else {
 					ui.Spacer(c)
 				}
@@ -368,7 +368,7 @@ func (w *window) threadRow(c *ui.Context, pal *palette, f *fileState, th *github
 						label = "Hide"
 					}
 					b := ui.ButtonBase(c).Padding(3, 8).Radius(6).Children(func() {
-						ui.Text(c, label).FontSize(12).FontWeight(600).TextColor(t.Accent)
+						ui.Text(c, label).FontSize(em(c, 12)).FontWeight(600).TextColor(t.Accent)
 					})
 					if b.Clicked() {
 						p.opened[th.RootID] = folded
@@ -416,8 +416,8 @@ func (w *window) threadComment(c *ui.Context, pal *palette, th *github.Thread, c
 		avatar(c, cm.Author, 24)
 		ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
 			ui.Row(c).Gap(6).Children(func() {
-				ui.Text(c, cm.Author.Login).FontSize(12).Bold()
-				ui.Text(c, relativeTime(w.now, cm.CreatedAt)).FontSize(11).TextColor(t.TextMuted).
+				ui.Text(c, cm.Author.Login).FontSize(em(c, 12)).Bold()
+				ui.Text(c, relativeTime(w.now, cm.CreatedAt)).FontSize(em(c, 11)).TextColor(t.TextMuted).
 					Tooltip(cm.CreatedAt.Local().Format("Mon Jan 2 15:04 2006"))
 				ui.Spacer(c)
 				if own && p.editing != cm.ID {
@@ -433,7 +433,7 @@ func (w *window) threadComment(c *ui.Context, pal *palette, th *github.Thread, c
 				}
 			})
 			if p.editing == cm.ID {
-				area := ui.TextAreaBase(c, &p.editText).MinHeight(60).Padding(8, 10).FontSize(13).Radius(8).
+				area := ui.TextAreaBase(c, &p.editText).MinHeight(60).Padding(8, 10).FontSize(em(c, 13)).Radius(8).
 					Background(pal.codeBg).Border(1, t.Accent.Alpha(0.5)).Label("Edit comment").AutoFocus()
 				if area.Focused() {
 					w.typing = true
@@ -486,7 +486,7 @@ func (w *window) replyBox(c *ui.Context, pal *palette, th *github.Thread) {
 		p.replies[th.RootID] = text
 	}
 	ui.Column(c).Gap(8).Padding(8, 12, 10).BorderWidth(1, 0, 0, 0).BorderColor(pal.cardBorder).Children(func() {
-		area := ui.TextAreaBase(c, text).Placeholder("Reply…").MinHeight(34).Padding(7, 10).FontSize(13).Radius(8).
+		area := ui.TextAreaBase(c, text).Placeholder("Reply…").MinHeight(34).Padding(7, 10).FontSize(em(c, 13)).Radius(8).
 			Background(pal.codeBg).Border(1, pal.cardBorder).Label("Reply to the thread")
 		focused := area.Focused()
 		if focused {
@@ -512,7 +512,7 @@ func (w *window) replyBox(c *ui.Context, pal *palette, th *github.Thread) {
 		}
 		if strings.TrimSpace(*text) != "" {
 			ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-				ui.Text(c, "⌘↩ replies").FontSize(11).TextColor(t.TextMuted)
+				ui.Text(c, "⌘↩ replies").FontSize(em(c, 11)).TextColor(t.TextMuted)
 				if ui.PrimaryButton(c, "Reply").Disabled(p.busy > 0).Clicked() {
 					send()
 				}
@@ -532,12 +532,12 @@ func (w *window) prCommentActions(c *ui.Context, pal *palette, cm *comment) {
 	ui.Row(c).Gap(8).Padding(8, 10).BorderWidth(1, 0, 0, 0).BorderColor(pal.cardBorder).Children(func() {
 		switch {
 		case cm.postErr != "":
-			ui.Text(c, cm.postErr).FontSize(12).TextColor(t.Danger).Grow(1).Shrink(1).MinWidth(0).MaxLines(3).Selectable()
+			ui.Text(c, cm.postErr).FontSize(em(c, 12)).TextColor(t.Danger).Grow(1).Shrink(1).MinWidth(0).MaxLines(3).Selectable()
 		case !p.canWrite():
-			ui.Text(c, "Kept here: copy it with the others as Markdown.").FontSize(12).TextColor(t.TextMuted).Grow(1).Shrink(1).MinWidth(0)
+			ui.Text(c, "Kept here: copy it with the others as Markdown.").FontSize(em(c, 12)).TextColor(t.TextMuted).Grow(1).Shrink(1).MinWidth(0)
 			return
 		default:
-			ui.Text(c, "⌘↩ adds it to your review").FontSize(11).TextColor(t.TextMuted).Grow(1).Shrink(1).MinWidth(0)
+			ui.Text(c, "⌘↩ adds it to your review").FontSize(em(c, 11)).TextColor(t.TextMuted).Grow(1).Shrink(1).MinWidth(0)
 		}
 		can := cm.pending() && !cm.posting
 		if ui.Button(c, "Add Single Comment").Disabled(!can).Clicked() {
@@ -567,10 +567,10 @@ func (w *window) reviewButton(c *ui.Context, pal *palette) {
 		pending = p.reviews.PendingComments()
 	}
 	b := ui.Button(c, "").Height(28).Disabled(!p.canWrite()).Children(func() {
-		ui.Icon(c, iconCheckCircle).FontSize(14)
+		ui.Icon(c, iconCheckCircle).FontSize(em(c, 14))
 		ui.Text(c, "Review").SingleLine()
 		if pending > 0 {
-			ui.Text(c, itoa(pending)).FontSize(11).FontWeight(700).Padding(0, 6).Radius(8).Background(pal.ref.Alpha(0.2)).TextColor(pal.ref)
+			ui.Text(c, itoa(pending)).FontSize(em(c, 11)).FontWeight(700).Padding(0, 6).Radius(8).Background(pal.ref.Alpha(0.2)).TextColor(pal.ref)
 		}
 	})
 	if p.readOnly != "" {
@@ -630,12 +630,12 @@ func (w *window) reviewDialog(c *ui.Context) {
 	ui.Modal(c, &p.submitOpen, func() {
 		ui.Column(c).Width(500).Gap(14).Children(func() {
 			ui.Column(c).Gap(4).Children(func() {
-				ui.Text(c, "Finish Your Review").FontSize(16).Bold()
+				ui.Text(c, "Finish Your Review").FontSize(em(c, 16)).Bold()
 				detail := fmt.Sprintf("#%d %s", p.number, p.meta.Title)
 				if drafts > 0 {
 					detail = fmt.Sprintf("%s goes with it. %s", plural(drafts, "pending comment"), detail)
 				}
-				ui.Text(c, detail).FontSize(13).TextColor(t.TextMuted).MaxLines(2)
+				ui.Text(c, detail).FontSize(em(c, 13)).TextColor(t.TextMuted).MaxLines(2)
 			})
 			area := ui.TextArea(c, &p.submitBody).Placeholder("Leave a comment").MinHeight(110).Label("Review summary").AutoFocus()
 			if area.Shortcut(ui.Cmd, ui.KeyEnter) {
@@ -656,8 +656,8 @@ func (w *window) reviewDialog(c *ui.Context) {
 							dot.Border(1.5, ui.RGBA(127, 127, 127, 0.45))
 						}
 						ui.Column(c).Gap(1).Children(func() {
-							ui.Text(c, label).FontSize(13).FontWeight(600)
-							ui.Text(c, detail).FontSize(12).TextColor(t.TextMuted)
+							ui.Text(c, label).FontSize(em(c, 13)).FontWeight(600)
+							ui.Text(c, detail).FontSize(em(c, 12)).TextColor(t.TextMuted)
 						})
 					})
 					if disabled {
@@ -669,7 +669,7 @@ func (w *window) reviewDialog(c *ui.Context) {
 				option(github.VerdictRequestChanges, "Request changes", "Submit feedback that must be addressed before merging.", own)
 			})
 			if p.submitErr != "" {
-				ui.Text(c, p.submitErr).FontSize(12).TextColor(t.Danger).Selectable()
+				ui.Text(c, p.submitErr).FontSize(em(c, 12)).TextColor(t.Danger).Selectable()
 			}
 			ui.Row(c).Gap(8).Children(func() {
 				if pending != nil {

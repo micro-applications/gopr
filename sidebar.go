@@ -324,8 +324,8 @@ func searchInput(c *ui.Context, query *string, placeholder string, focus *bool, 
 	changed := false
 	box := ui.Row(c).Height(28).Padding(0, 6, 0, 8).Gap(6).Radius(7).Background(ui.RGBA(127, 127, 127, 0.12))
 	box.Children(func() {
-		ui.Icon(c, iconSearch).FontSize(13).TextColor(t.TextMuted)
-		in := ui.TextInputBase(c, query).Placeholder(placeholder).Label(placeholder).FontSize(13).Grow(1).MinWidth(0)
+		ui.Icon(c, iconSearch).FontSize(em(c, 13)).TextColor(t.TextMuted)
+		in := ui.TextInputBase(c, query).Placeholder(placeholder).Label(placeholder).FontSize(em(c, 13)).Grow(1).MinWidth(0)
 		if *focus {
 			in.Focus()
 			*focus = false
@@ -339,7 +339,7 @@ func searchInput(c *ui.Context, query *string, placeholder string, focus *bool, 
 		}
 		if *query != "" {
 			clear := ui.ButtonBase(c).Size(16, 16).Radius(8).Center().Background(t.TextMuted.Alpha(0.45)).Label("Clear").FocusRing(false)
-			clear.Children(func() { ui.Icon(c, iconClose).FontSize(10).TextColor(t.Background) })
+			clear.Children(func() { ui.Icon(c, iconClose).FontSize(em(c, 10)).TextColor(t.Background) })
 			if clear.Clicked() || in.Shortcut(0, ui.KeyEscape) {
 				*query = ""
 				changed = true
@@ -358,7 +358,7 @@ func iconButton(c *ui.Context, svg *ui.SVG, tip string) ui.Element {
 	} else if b.Hovered() {
 		b.Background(ui.RGBA(127, 127, 127, 0.13))
 	}
-	b.Children(func() { ui.Icon(c, svg).FontSize(16) })
+	b.Children(func() { ui.Icon(c, svg).FontSize(em(c, 16)) })
 	return b
 }
 
@@ -396,7 +396,7 @@ func (w *window) fileTree(c *ui.Context) {
 			case strings.TrimSpace(w.filter) != "":
 				msg = "No matching files"
 			}
-			ui.Text(c, msg).FontSize(12).TextColor(t.TextMuted)
+			ui.Text(c, msg).FontSize(em(c, 12)).TextColor(t.TextMuted)
 		})
 		return
 	}
@@ -462,7 +462,7 @@ func (w *window) fileTree(c *ui.Context) {
 			arrow := ui.Box(c).Size(14, 14).Center().Shrink(0)
 			if n.dir {
 				arrow.Children(func() {
-					ic := ui.Icon(c, iconChevronDown).FontSize(12).TextColor(muted)
+					ic := ui.Icon(c, iconChevronDown).FontSize(em(c, 12)).TextColor(muted)
 					target := float32(0)
 					if w.closedDirs[key] {
 						target = -90
@@ -471,16 +471,16 @@ func (w *window) fileTree(c *ui.Context) {
 				})
 				if n.group >= 0 && n.group < len(w.groups) {
 					g := &w.groups[n.group]
-					icon := ui.Icon(c, groupIcon(g)).FontSize(14).TextColor(muted)
+					icon := ui.Icon(c, groupIcon(g)).FontSize(em(c, 14)).TextColor(muted)
 					if g.critical && !(selected && focused) {
 						icon.TextColor(t.Danger)
 					}
-					ui.Text(c, n.name).FontSize(13).FontWeight(600).SingleLine().Grow(1).Shrink(1).MinWidth(0).Tooltip(g.summary)
-					ui.Textf(c, "%d", w.treeCount(key)).FontFeatures("tnum").FontSize(10).FontWeight(500).TextColor(muted).Shrink(0)
+					ui.Text(c, n.name).FontSize(em(c, 13)).FontWeight(600).SingleLine().Grow(1).Shrink(1).MinWidth(0).Tooltip(g.summary)
+					ui.Textf(c, "%d", w.treeCount(key)).FontFeatures("tnum").FontSize(em(c, 10)).FontWeight(500).TextColor(muted).Shrink(0)
 					return
 				}
-				ui.Icon(c, iconFolder).FontSize(14).TextColor(muted)
-				ui.Text(c, n.name).FontSize(13).SingleLine().Grow(1).Shrink(1).MinWidth(0)
+				ui.Icon(c, iconFolder).FontSize(em(c, 14)).TextColor(muted)
+				ui.Text(c, n.name).FontSize(em(c, 13)).SingleLine().Grow(1).Shrink(1).MinWidth(0)
 				return
 			}
 			f := w.files[n.file]
@@ -489,7 +489,7 @@ func (w *window) fileTree(c *ui.Context) {
 			if selected && focused {
 				icon.TextColor(muted)
 			}
-			name := ui.Text(c, n.name).FontSize(13).SingleLine().Grow(1).Shrink(1).MinWidth(0)
+			name := ui.Text(c, n.name).FontSize(em(c, 13)).SingleLine().Grow(1).Shrink(1).MinWidth(0)
 			if viewed && !(selected && focused) {
 				name.TextColor(t.TextMuted)
 			}
@@ -502,7 +502,7 @@ func (w *window) fileTree(c *ui.Context) {
 				if selected && focused {
 					color = t.AccentText
 				}
-				ui.Icon(c, iconSparkle).FontSize(11).TextColor(color).Shrink(0).Tooltip(plural(len(notes), "AI note"))
+				ui.Icon(c, iconSparkle).FontSize(em(c, 11)).TextColor(color).Shrink(0).Tooltip(plural(len(notes), "AI note"))
 			}
 			if countable(f) && (f.Additions > 0 || f.Deletions > 0) {
 				// Grey, in color on the row pointed at or chosen.
@@ -516,7 +516,7 @@ func (w *window) fileTree(c *ui.Context) {
 				ui.RichText(c,
 					ui.Span{Text: "+" + compact(f.Additions), Color: add},
 					ui.Span{Text: " −" + compact(f.Deletions), Color: del},
-				).FontFeatures("tnum").FontSize(10).FontWeight(500).Shrink(0).
+				).FontFeatures("tnum").FontSize(em(c, 10)).FontWeight(500).Shrink(0).
 					Tooltip(lines(f.Additions, "added") + ", " + lines(f.Deletions, "removed"))
 			}
 			letter := statusColor(f.Status, pal, t)
@@ -532,7 +532,7 @@ func (w *window) fileTree(c *ui.Context) {
 			if f.Status == diff.Modified && !w.reloaded[f.Path] {
 				ui.Box(c).Width(12).Shrink(0)
 			} else {
-				ui.Text(c, statusLetter(f)).FontFeatures("tnum").FontSize(11).FontWeight(600).TextColor(letter).
+				ui.Text(c, statusLetter(f)).FontFeatures("tnum").FontSize(em(c, 11)).FontWeight(600).TextColor(letter).
 					Width(12).TextAlign(ui.Center).Shrink(0).Tooltip(f.Status.Label())
 			}
 		})

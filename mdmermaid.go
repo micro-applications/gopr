@@ -151,7 +151,7 @@ func (w *window) mermaidBlock(c *ui.Context, b *markdown.CodeBlockView) {
 	case m.err != nil:
 		ui.Column(c).Gap(6).Children(func() {
 			markdown.DefaultCodeBlock(c, b)
-			ui.Text(c, "Mermaid: "+errorText(m.err)).FontSize(12).TextColor(t.Danger)
+			ui.Text(c, "Mermaid: "+errorText(m.err)).FontSize(em(c, 12)).TextColor(t.Danger)
 		})
 	default:
 		w.mermaidView(c, m)

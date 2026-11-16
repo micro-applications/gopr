@@ -199,7 +199,7 @@ func (w *window) markdownWidthButtons(c *ui.Context, pal *palette) {
 					setMarkdownWidth(mw.key)
 				}
 			})
-			s.Children(func() { ui.Icon(c, mw.icon).FontSize(15) })
+			s.Children(func() { ui.Icon(c, mw.icon).FontSize(em(c, 15)) })
 		}
 	})
 }
@@ -280,7 +280,7 @@ func previewToggle(c *ui.Context, pal *palette, label string, names, texts [2]st
 					choose(i)
 				}
 			})
-			s.Children(func() { ui.Text(c, texts[i]).FontSize(12).FontWeight(600) })
+			s.Children(func() { ui.Text(c, texts[i]).FontSize(em(c, 12)).FontWeight(600) })
 		}
 	})
 }

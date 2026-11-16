@@ -309,12 +309,12 @@ func (w *window) scopeBar(c *ui.Context, pal *palette) {
 				}
 				done := viewed[gi] == total[gi] && total[gi] > 0
 				b.Children(func() {
-					icon := ui.Icon(c, groupIcon(g)).FontSize(12).TextColor(t.TextMuted)
+					icon := ui.Icon(c, groupIcon(g)).FontSize(em(c, 12)).TextColor(t.TextMuted)
 					if g.critical {
 						icon.TextColor(t.Danger)
 					}
-					ui.Text(c, g.label).FontSize(12).FontWeight(600).SingleLine()
-					count := ui.Textf(c, "%d/%d", viewed[gi], total[gi]).FontFeatures("tnum").FontSize(10).FontWeight(500).TextColor(t.TextMuted)
+					ui.Text(c, g.label).FontSize(em(c, 12)).FontWeight(600).SingleLine()
+					count := ui.Textf(c, "%d/%d", viewed[gi], total[gi]).FontFeatures("tnum").FontSize(em(c, 10)).FontWeight(500).TextColor(t.TextMuted)
 					if done {
 						count.TextColor(pal.viewed)
 					}
@@ -351,22 +351,22 @@ func (w *window) groupRow(c *ui.Context, pal *palette, gi int) {
 	}
 	ui.Column(c).Padding(20, 2, 0).Gap(4).Background(pal.appBg).Children(func() {
 		ui.Row(c).Gap(8).Children(func() {
-			icon := ui.Icon(c, groupIcon(g)).FontSize(15).TextColor(t.TextMuted)
+			icon := ui.Icon(c, groupIcon(g)).FontSize(em(c, 15)).TextColor(t.TextMuted)
 			if g.critical {
 				icon.TextColor(t.Danger)
 			}
-			ui.Text(c, g.label).FontSize(15).Bold().SingleLine().Shrink(1).MinWidth(0)
+			ui.Text(c, g.label).FontSize(em(c, 15)).Bold().SingleLine().Shrink(1).MinWidth(0)
 			if g.critical {
-				ui.Text(c, "Needs care").FontSize(11).FontWeight(600).Padding(2, 8).Radius(10).
+				ui.Text(c, "Needs care").FontSize(em(c, 11)).FontWeight(600).Padding(2, 8).Radius(10).
 					Background(t.Danger.Alpha(0.14)).TextColor(t.Danger).Shrink(0)
 			}
 			ui.RichText(c,
 				ui.Span{Text: plural(len(files), "file") + " · ", Color: t.TextMuted},
 				ui.Span{Text: "+" + thousands(adds), Color: pal.addText},
 				ui.Span{Text: " −" + thousands(dels), Color: pal.delText},
-			).FontSize(12).FontWeight(600).Shrink(0)
+			).FontSize(em(c, 12)).FontWeight(600).Shrink(0)
 			ui.Spacer(c)
-			count := ui.Textf(c, "%d/%d viewed", viewed, len(files)).FontSize(12).TextColor(t.TextMuted).Shrink(0)
+			count := ui.Textf(c, "%d/%d viewed", viewed, len(files)).FontSize(em(c, 12)).TextColor(t.TextMuted).Shrink(0)
 			if viewed == len(files) && viewed > 0 {
 				count.TextColor(pal.viewed)
 			}
@@ -375,7 +375,7 @@ func (w *window) groupRow(c *ui.Context, pal *palette, gi int) {
 				label = "Expand"
 			}
 			b := ui.ButtonBase(c).Padding(3, 8).Radius(6).Label(label + " " + g.label).Children(func() {
-				ui.Text(c, label).FontSize(12).FontWeight(600).TextColor(t.TextMuted)
+				ui.Text(c, label).FontSize(em(c, 12)).FontWeight(600).TextColor(t.TextMuted)
 			})
 			if b.Hovered() {
 				b.Background(pal.hover)
@@ -388,7 +388,7 @@ func (w *window) groupRow(c *ui.Context, pal *palette, gi int) {
 			}
 		})
 		if g.summary != "" {
-			ui.Text(c, g.summary).FontSize(13).TextColor(t.TextMuted).Selectable().Padding(0, 0, 0, 23)
+			ui.Text(c, g.summary).FontSize(em(c, 13)).TextColor(t.TextMuted).Selectable().Padding(0, 0, 0, 23)
 		}
 	})
 }
@@ -465,7 +465,7 @@ func (w *window) noteRow(c *ui.Context, pal *palette, n *aiNote) {
 	w.card(c, pal).Padding(6, 16).Children(func() {
 		ui.Row(c).Grow(1).MinWidth(0).Gap(10).Padding(8, 12).Radius(10).AlignItems(ui.Start).
 			Background(accent.Alpha(0.07)).Border(1, border).Children(func() {
-			ui.Icon(c, iconSparkle).FontSize(14).TextColor(accent).Margin(1, 0, 0)
+			ui.Icon(c, iconSparkle).FontSize(em(c, 14)).TextColor(accent).Margin(1, 0, 0)
 			ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
 				label := "AI note"
 				switch {
@@ -479,8 +479,8 @@ func (w *window) noteRow(c *ui.Context, pal *palette, n *aiNote) {
 				if n.critical {
 					label += " · needs care"
 				}
-				ui.Text(c, label).FontSize(11).FontWeight(600).TextColor(accent)
-				ui.Text(c, n.text).FontSize(13).Selectable()
+				ui.Text(c, label).FontSize(em(c, 11)).FontWeight(600).TextColor(accent)
+				ui.Text(c, n.text).FontSize(em(c, 13)).Selectable()
 			})
 		})
 	})

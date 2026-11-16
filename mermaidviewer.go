@@ -159,12 +159,12 @@ func (w *window) mermaidViewerView(c *ui.Context, pal *palette) {
 			}
 			ui.Row(c).Height(titleBarHeight).Padding(0, 12, 0, left).Gap(6).AlignItems(ui.Center).Shrink(0).Opacity(open).
 				BorderWidth(0, 0, 1, 0).BorderColor(pal.cardBorder).DragWindow().Children(func() {
-				ui.Text(c, "Diagram").FontSize(13).FontWeight(600)
+				ui.Text(c, "Diagram").FontSize(em(c, 13)).FontWeight(600)
 				ui.Spacer(c)
 				if iconButton(c, iconZoomOut, "Zoom Out (−)").Size(28, 26).Label("Zoom Out").Clicked() {
 					v.zoomBy(-1)
 				}
-				ui.Text(c, fmt.Sprintf("%d%%", int(math.Round(float64(v.zoom*100))))).FontSize(12).
+				ui.Text(c, fmt.Sprintf("%d%%", int(math.Round(float64(v.zoom*100))))).FontSize(em(c, 12)).
 					FontFeatures("tnum").Width(48).TextAlign(ui.Center).TextColor(t.TextMuted).Label("Zoom")
 				if iconButton(c, iconZoomIn, "Zoom In (+)").Size(28, 26).Label("Zoom In").Clicked() {
 					v.zoomBy(1)
