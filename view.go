@@ -507,6 +507,12 @@ func (w *window) shortcuts(c *ui.Context, reviewBuilt bool) {
 	if w.list.Shortcut(c, 0, ui.KeyEnter) || (w.selHunk >= 0 && c.Shortcut(0, ui.KeyEnter)) {
 		w.commentOnSelection()
 	}
+	if c.Shortcut(ui.Shift, ui.KeyJ) {
+		w.moveInStack(-1)
+	}
+	if c.Shortcut(ui.Shift, ui.KeyK) {
+		w.moveInStack(1)
+	}
 	if c.Shortcut(0, ui.KeyN) {
 		w.nextNote(1)
 	}

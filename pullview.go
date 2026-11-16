@@ -140,6 +140,7 @@ func (w *window) pullHeader(c *ui.Context, pal *palette) ui.Element {
 	return ui.Column(c).Padding(14, 16).Gap(10).Radius(cardRadius).Background(pal.headerBg).Children(func() {
 		ui.Row(c).Gap(10).AlignItems(ui.Start).Children(func() {
 			stateBadge(c, pal, m)
+			w.stackSwitcher(c, pal)
 			ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
 				ui.RichText(c,
 					ui.Span{Text: m.Title, Weight: 700},

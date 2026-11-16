@@ -51,6 +51,8 @@ func (w *window) commands() []command {
 		{title: "Stop the AI Review", run: w.stopAnalysis},
 		{title: "Next AI Note", keys: "N", run: notes(1)},
 		{title: "Previous AI Note", keys: "⇧N", run: notes(-1)},
+		{title: "Next Pull Request Down the Stack", keys: "⇧J", run: func() { w.moveInStack(-1) }},
+		{title: "Next Pull Request Up the Stack", keys: "⇧K", run: func() { w.moveInStack(1) }},
 		{title: "Group Files by Kind", run: func() { w.chooseGrouping(groupKind) }},
 		{title: "Group Files by AI Review", run: func() { w.chooseGrouping(groupAI) }},
 		{title: "Ungroup Files", run: func() { w.chooseGrouping(groupNone) }},
@@ -351,7 +353,7 @@ func (w *window) shortcutsHelp(c *ui.Context) {
 			{"Toggle sidebar", "⌘⇧B"}, {"Toggle files", "⌘⇧E"}, {"Focus mode", "⌘⇧F"}, {"Toggle word wrap", "⌥Z"}, {"Open file in editor", "⌘⇧O"}, {"Refresh", "⌘R"}}},
 		{"Search", [][2]string{{"Find in diffs", "⌘F"}, {"Next match", "↩"}, {"Previous match", "⇧↩"}, {"Close search", "Esc"}}},
 		{"Comments", [][2]string{{"Comment on a line", "Click"}, {"Comment on the hunk", "↩"}, {"Add comment", "⌘↩"}, {"Discard comment", "Esc"}}},
-		{"Pull requests", [][2]string{{"Open pull request", "⌘O"}, {"Review with AI", "⌘⇧I"}, {"Add to your review", "⌘↩"}, {"Reply", "⌘↩"}}},
+		{"Pull requests", [][2]string{{"Open pull request", "⌘O"}, {"Down the stack", "⇧J"}, {"Up the stack", "⇧K"}, {"Review with AI", "⌘⇧I"}, {"Add to your review", "⌘↩"}, {"Reply", "⌘↩"}}},
 		{"Window", [][2]string{{"Zoom in", "⌘+"}, {"Zoom out", "⌘-"}, {"Actual size", "⌘0"}}},
 	}
 	ui.Modal(c, &w.help, func() {

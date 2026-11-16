@@ -120,6 +120,12 @@ type pullState struct {
 	// checkedAt is when GitHub was last asked for new commits.
 	checkedAt time.Time
 
+	// stack is the stack the pull request is in, nil when alone;
+	// stackOpen shows the header's list of it.
+	stack        *github.Stack
+	stackLoading bool
+	stackOpen    bool
+
 	descOpen bool
 	// descOpts are the options of the description, rendered as Markdown,
 	// which keep its parse.

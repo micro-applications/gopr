@@ -74,12 +74,15 @@ func (c *Client) PullCommits(ctx context.Context, repo Repo, number int) ([]Pull
 // Summary is a pull request as a list shows it. Without a token, the
 // review decision, the checks and the counts are unknown.
 type Summary struct {
-	Number         int
-	Title          string
-	URL            string
-	Draft          bool
-	Author         User
-	HeadRef        string
+	Number  int
+	Title   string
+	URL     string
+	Draft   bool
+	Author  User
+	HeadRef string
+	BaseRef string
+	// CrossRepo is set when the head branch is a fork's.
+	CrossRepo      bool
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	Comments       int
@@ -99,7 +102,7 @@ type Label struct {
 
 // pullFields are the fields of a pull request that searchNode decodes.
 const pullFields = `
-        number title url isDraft createdAt updatedAt headRefName
+        number title url isDraft createdAt updatedAt headRefName baseRefName isCrossRepository
         author { login avatarUrl }
         labels(first: 10) { nodes { name color } }
         comments { totalCount }
@@ -116,6 +119,8 @@ type searchNode struct {
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
 	HeadRefName string    `json:"headRefName"`
+	BaseRefName string    `json:"baseRefName"`
+	CrossRepo   bool      `json:"isCrossRepository"`
 	Author      *struct {
 		Login     string `json:"login"`
 		AvatarURL string `json:"avatarUrl"`
@@ -146,7 +151,7 @@ type searchNode struct {
 
 // summaryOf converts a search result to a Summary.
 func summaryOf(n searchNode) Summary {
-	s := Summary{Number: n.Number, Title: n.Title, URL: n.URL, Draft: n.IsDraft, HeadRef: n.HeadRefName,
+	s := Summary{Number: n.Number, Title: n.Title, URL: n.URL, Draft: n.IsDraft, HeadRef: n.HeadRefName, BaseRef: n.BaseRefName, CrossRepo: n.CrossRepo,
 		CreatedAt: n.CreatedAt, UpdatedAt: n.UpdatedAt, Comments: n.Comments.TotalCount,
 		Additions: n.Additions, Deletions: n.Deletions, ChangedFiles: n.ChangedFiles}
 	if n.Author != nil {

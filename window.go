@@ -572,6 +572,7 @@ func (w *window) load() {
 			if src.kind == sourcePull && err == nil {
 				w.pr.apply(pulled)
 				w.loadReviews()
+				w.loadStack()
 			}
 			w.base = base
 			w.oldRev, w.newRev = oldRev, newRev

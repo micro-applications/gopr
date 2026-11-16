@@ -19,6 +19,14 @@ your disk, or clones it, and shows the pull request there.
   account. Each section shows at most 100 pull requests and says so when it
   is capped or fails. The inbox refreshes when the window gets the focus after
   five minutes, on the refresh button and on <kbd>⌘R</kbd>.
+- **Stacked pull requests**: a pull request based on the branch of another
+  goes with it in the sidebar, under a "Stack of N" label, top of the stack
+  first. The header of a pull request in a stack has a switcher, as GitHub's:
+  where it is in the stack, and a list of the stack to open another from;
+  <kbd>⇧J</kbd> and <kbd>⇧K</kbd> move down and up the stack. A stack is a
+  chain: a branch with several open pull requests based on it (a long-lived
+  `develop`) ends it. The sidebar groups only the pull requests it lists, so
+  its stacks can be shorter than the header's.
 - **Workspace**: opening a pull request fetches its commits into your clone
   of the repository (cloned to `<cloneRoot>/<owner>/<name>` when you have
   none). The files pane lists the changed files, grouped by kind, each group
@@ -93,6 +101,7 @@ from its name or URL.
 | <kbd>⌘W</kbd> | Close file tab |
 | <kbd>J</kbd> / <kbd>K</kbd> | Next / previous hunk |
 | <kbd>N</kbd> / <kbd>⇧N</kbd> | Next / previous AI note |
+| <kbd>⇧J</kbd> / <kbd>⇧K</kbd> | Down / up the pull request's stack |
 | <kbd>Enter</kbd> | Comment on the hunk chosen |
 | <kbd>⌘↩</kbd> | Add the comment |
 | <kbd>⌘⇧I</kbd> | Review with AI |

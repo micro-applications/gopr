@@ -18,6 +18,7 @@ const (
 	inboxPull                        // a pull request
 	inboxNote                        // a section's note: none, capped
 	inboxError                       // a section's error
+	inboxStack                       // the label of a stack of pull requests
 )
 
 // inboxItem is a row of the inbox's list.
@@ -26,6 +27,10 @@ type inboxItem struct {
 	section github.Section
 	pull    *github.InboxPull
 	text    string
+	// stack is where a pull request is in its stack; an inboxStack row
+	// has the stack's size in n.
+	stack stackPos
+	n     int
 }
 
 // inboxKey names a pull request of the inbox, as acme/api#4.
@@ -59,11 +64,20 @@ func (w *window) inboxItems() []inboxItem {
 			items = append(items, inboxItem{kind: inboxError, section: s, text: errorText(sec.err)})
 			continue
 		}
-		shown := 0
+		var matching []*github.InboxPull
 		for i := range sec.pulls {
 			if p := &sec.pulls[i]; inboxMatches(p, filter) {
-				items = append(items, inboxItem{kind: inboxPull, section: s, pull: p})
-				shown++
+				matching = append(matching, p)
+			}
+		}
+		shown := len(matching)
+		// Stacked pull requests go together, under a label.
+		for _, g := range stackGroups(matching) {
+			if len(g) > 1 {
+				items = append(items, inboxItem{kind: inboxStack, section: s, pull: g[len(g)-1], n: len(g)})
+			}
+			for i, p := range g {
+				items = append(items, inboxItem{kind: inboxPull, section: s, pull: p, stack: stackPosOf(i, len(g))})
 			}
 		}
 		switch {
@@ -198,6 +212,9 @@ func (w *window) inboxBody(c *ui.Context) {
 		if it.kind == inboxPull {
 			return inboxKey(it.pull)
 		}
+		if it.kind == inboxStack {
+			return "stack:" + inboxKey(it.pull)
+		}
 		return fmt.Sprintf("%d:%d:%s", it.kind, it.section, it.text)
 	}
 	in.list.Label = func(i int) string {
@@ -218,10 +235,22 @@ func (w *window) inboxBody(c *ui.Context) {
 			current := w.source == pullSource(p.Repo, p.Number) ||
 				(w.opening != nil && w.opening.repo == p.Repo && w.opening.number == p.Number)
 			selected := key == in.sel && in.list.FocusWithin(c)
+			if it.stack != stackNone {
+				var row ui.Element
+				stackRail(c, it.stack, func() {
+					row = pullRow(c, w, pal, &p.Summary, p.Repo.String(), it.section != github.Mine, current, selected).Grow(1).MinWidth(0)
+				})
+				if row.Clicked() {
+					choose(p)
+				}
+				break
+			}
 			row := pullRow(c, w, pal, &p.Summary, p.Repo.String(), it.section != github.Mine, current, selected)
 			if row.Clicked() {
 				choose(p)
 			}
+		case inboxStack:
+			stackLabel(c, it.n, it.pull.BaseRef)
 		case inboxNote:
 			ui.Text(c, it.text).FontSize(11).TextColor(t.TextMuted).Padding(4, 10, 8)
 		case inboxError:
