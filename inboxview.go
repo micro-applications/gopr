@@ -170,7 +170,7 @@ func (w *window) inboxBody(c *ui.Context) {
 	in := &w.inbox
 	note := func(msg string, actions func()) {
 		ui.Column(c).Grow(1).Center().Padding(16).Gap(8).Children(func() {
-			ui.Text(c, msg).FontSize(12).TextColor(t.TextMuted).TextAlign(ui.Center)
+			ui.Text(c, msg).FontSize(em(c, 12)).TextColor(t.TextMuted).TextAlign(ui.Center)
 			if actions != nil {
 				actions()
 			}
@@ -252,10 +252,10 @@ func (w *window) inboxBody(c *ui.Context) {
 		case inboxStack:
 			stackLabel(c, it.n, it.pull.BaseRef)
 		case inboxNote:
-			ui.Text(c, it.text).FontSize(11).TextColor(t.TextMuted).Padding(4, 10, 8)
+			ui.Text(c, it.text).FontSize(em(c, 11)).TextColor(t.TextMuted).Padding(4, 10, 8)
 		case inboxError:
 			ui.Column(c).Gap(6).Padding(4, 10, 8).AlignItems(ui.Start).Children(func() {
-				ui.Text(c, it.text).FontSize(11).TextColor(t.Danger).Selectable()
+				ui.Text(c, it.text).FontSize(em(c, 11)).TextColor(t.Danger).Selectable()
 				if ui.Button(c, "Try Again").Clicked() {
 					w.loadInbox()
 				}
@@ -328,16 +328,16 @@ func (w *window) inboxSectionHeader(c *ui.Context, s github.Section) {
 	}
 	b.Children(func() {
 		ui.Row(c).Grow(1).Gap(5).Children(func() {
-			ic := ui.Icon(c, iconChevronDown).FontSize(12)
+			ic := ui.Icon(c, iconChevronDown).FontSize(em(c, 12))
 			target := float32(0)
 			if collapsed {
 				target = -90
 			}
 			ic.Rotate(ic.Animate("rot", target, 150*time.Millisecond))
-			ui.Text(c, title).FontSize(12).FontWeight(600).SingleLine().Shrink(1).MinWidth(0)
+			ui.Text(c, title).FontSize(em(c, 12)).FontWeight(600).SingleLine().Shrink(1).MinWidth(0)
 			ui.Spacer(c)
 			if sec.err == nil && w.inbox.loaded {
-				ui.Text(c, thousands(sec.total)).FontFeatures("tnum").FontSize(10).FontWeight(500)
+				ui.Text(c, thousands(sec.total)).FontFeatures("tnum").FontSize(em(c, 10)).FontWeight(500)
 			}
 		})
 	})

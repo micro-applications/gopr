@@ -137,7 +137,7 @@ func (w *window) diffRow(c *ui.Context, pal *palette, i int, focused bool) {
 		w.fileHeader(c, pal, int(r.file), f, focused)
 	case rowNote:
 		w.card(c, pal).Padding(10, 16).Background(pal.gapBg).Children(func() {
-			ui.Text(c, w.fileNote(f)).FontSize(12).TextColor(pal.gapText)
+			ui.Text(c, w.fileNote(f)).FontSize(em(c, 12)).TextColor(pal.gapText)
 		})
 	case rowGap:
 		w.gapRow(c, pal, f, r)
@@ -227,7 +227,7 @@ func (w *window) fileHeader(c *ui.Context, pal *palette, idx int, f *fileState, 
 				if collapsed {
 					target = -90
 				}
-				ic := ui.Icon(c, iconChevronDown).FontSize(15).TextColor(t.TextMuted)
+				ic := ui.Icon(c, iconChevronDown).FontSize(em(c, 15)).TextColor(t.TextMuted)
 				ic.Rotate(ic.Animate("rot", target, 160*time.Millisecond))
 			})
 			pathColor := t.Text
@@ -239,9 +239,9 @@ func (w *window) fileHeader(c *ui.Context, pal *palette, idx int, f *fileState, 
 				ui.RichText(c,
 					ui.Span{Text: f.Dir(), Color: t.TextMuted},
 					ui.Span{Text: f.Name(), Color: pathColor, Weight: 600},
-				).Font(w.codeFont()).FontSize(13).SingleLine()
+				).Font(w.codeFont()).FontSize(em(c, 13)).SingleLine()
 				if f.OldPath != f.Path {
-					ui.Text(c, "from "+f.OldPath).Font(w.codeFont()).FontSize(11).TextColor(t.TextMuted).SingleLine()
+					ui.Text(c, "from "+f.OldPath).Font(w.codeFont()).FontSize(em(c, 11)).TextColor(t.TextMuted).SingleLine()
 				}
 			})
 		})
@@ -268,19 +268,19 @@ func (w *window) fileHeader(c *ui.Context, pal *palette, idx int, f *fileState, 
 		if countable(f) && (f.Additions > 0 || f.Deletions > 0) {
 			ui.Row(c).Gap(8).Padding(4, 9).Radius(14).Background(pal.pill).Shrink(0).
 				Tooltip(lines(f.Additions, "added") + ", " + lines(f.Deletions, "removed")).Children(func() {
-				ui.Text(c, "+"+thousands(f.Additions)).FontFeatures("tnum").FontSize(12).FontWeight(500).TextColor(pal.addText)
-				ui.Text(c, "−"+thousands(f.Deletions)).FontFeatures("tnum").FontSize(12).FontWeight(500).TextColor(pal.delText)
+				ui.Text(c, "+"+thousands(f.Additions)).FontFeatures("tnum").FontSize(em(c, 12)).FontWeight(500).TextColor(pal.addText)
+				ui.Text(c, "−"+thousands(f.Deletions)).FontFeatures("tnum").FontSize(em(c, 12)).FontWeight(500).TextColor(pal.delText)
 			})
 		}
 		if f.Generated {
-			ui.Text(c, "Generated").FontSize(11).FontWeight(600).Padding(4, 9).Radius(14).
+			ui.Text(c, "Generated").FontSize(em(c, 11)).FontWeight(600).Padding(4, 9).Radius(14).
 				Background(pal.ref.Alpha(0.15)).TextColor(pal.ref).Shrink(0)
 		}
 		if n := w.openThreads(f.Path); n > 0 {
 			ui.Row(c).Gap(4).Padding(4, 9).Radius(14).Background(pal.pill).TextColor(t.TextMuted).Shrink(0).
 				Tooltip(plural(n, "unresolved thread")).Children(func() {
-				ui.Icon(c, iconComment).FontSize(12)
-				ui.Text(c, itoa(n)).FontFeatures("tnum").FontSize(12).FontWeight(500)
+				ui.Icon(c, iconComment).FontSize(em(c, 12))
+				ui.Text(c, itoa(n)).FontFeatures("tnum").FontSize(em(c, 12)).FontWeight(500)
 			})
 		}
 		if canPreview(f) {
@@ -309,12 +309,12 @@ func (w *window) viewedButton(c *ui.Context, pal *palette, f *fileState, viewed 
 		box := ui.Box(c).Size(15, 15).Radius(4).Center()
 		if viewed {
 			box.Background(pal.viewed).Children(func() {
-				ui.Icon(c, iconCheck).FontSize(11).TextColor(pal.codeBg)
+				ui.Icon(c, iconCheck).FontSize(em(c, 11)).TextColor(pal.codeBg)
 			})
 		} else {
 			box.Border(1.5, ui.RGBA(127, 127, 127, 0.45))
 		}
-		ui.Text(c, "Viewed").FontSize(12).FontWeight(600).TextColor(map[bool]ui.Color{true: pal.viewed, false: t.Text}[viewed])
+		ui.Text(c, "Viewed").FontSize(em(c, 12)).FontWeight(600).TextColor(map[bool]ui.Color{true: pal.viewed, false: t.Text}[viewed])
 	})
 }
 
@@ -375,7 +375,7 @@ func (w *window) gapRow(c *ui.Context, pal *palette, f *fileState, r *row) {
 				if b.Hovered() {
 					b.TextColor(t.Text).Background(pal.hover)
 				}
-				b.Children(func() { ui.Icon(c, svg).FontSize(14) })
+				b.Children(func() { ui.Icon(c, svg).FontSize(em(c, 14)) })
 				if b.Clicked() {
 					action()
 				}
@@ -401,7 +401,7 @@ func (w *window) gapRow(c *ui.Context, pal *palette, f *fileState, r *row) {
 			if n == 1 {
 				text = "1 unmodified line"
 			}
-			ui.Text(c, text).FontSize(12).TextColor(pal.gapText)
+			ui.Text(c, text).FontSize(em(c, 12)).TextColor(pal.gapText)
 		})
 		if label.Hovered() && can {
 			label.Underline()
@@ -420,7 +420,7 @@ func (w *window) gapRow(c *ui.Context, pal *palette, f *fileState, r *row) {
 		}
 		if n > expandStep {
 			b := ui.ButtonBase(c).Padding(3, 8).Radius(6).Disabled(!can).Children(func() {
-				ui.Text(c, "Expand all").FontSize(12).FontWeight(600).TextColor(pal.gapText)
+				ui.Text(c, "Expand all").FontSize(em(c, 12)).FontWeight(600).TextColor(pal.gapText)
 			})
 			if b.Hovered() {
 				b.Background(pal.hover)
@@ -430,7 +430,7 @@ func (w *window) gapRow(c *ui.Context, pal *palette, f *fileState, r *row) {
 			}
 		}
 		if h := r.gap; int(h) < len(f.Hunks) && f.Hunks[h].Section != "" {
-			ui.Text(c, f.Hunks[h].Section).Font(w.codeFont()).FontSize(12).TextColor(pal.gapText).SingleLine().Grow(1).Shrink(1).MinWidth(0)
+			ui.Text(c, f.Hunks[h].Section).Font(w.codeFont()).FontSize(em(c, 12)).TextColor(pal.gapText).SingleLine().Grow(1).Shrink(1).MinWidth(0)
 		}
 	})
 }
@@ -627,7 +627,7 @@ func (w *window) lineCell(c *ui.Context, pal *palette, f *fileState, r *row, s l
 		if !hovered {
 			plus.Opacity(0)
 		}
-		plus.Children(func() { ui.Icon(c, iconPlus).FontSize(13) })
+		plus.Children(func() { ui.Icon(c, iconPlus).FontSize(em(c, 13)) })
 		if plus.Clicked() {
 			w.addComment(f.Path, sd, s.num, s.num)
 		}
@@ -686,8 +686,8 @@ func (w *window) commentRow(c *ui.Context, pal *palette, f *fileState, cm *comme
 		box := ui.Column(c).Grow(1).MinWidth(0).Radius(12).Border(1, pal.cardBorder).Background(pal.headerBg).Clip()
 		box.Children(func() {
 			ui.Row(c).Height(32).Padding(0, 4, 0, 10).Gap(8).BorderWidth(0, 0, 1, 0).BorderColor(pal.cardBorder).Children(func() {
-				ui.Text(c, w.userName()).FontSize(12).Bold()
-				ui.Text(c, cm.label()).FontSize(11).TextColor(t.TextMuted)
+				ui.Text(c, w.userName()).FontSize(em(c, 12)).Bold()
+				ui.Text(c, cm.label()).FontSize(em(c, 11)).TextColor(t.TextMuted)
 				ui.Spacer(c)
 				if iconButton(c, iconClose, "Delete comment").Size(24, 24).Clicked() {
 					w.deleteComment(cm)
@@ -749,7 +749,7 @@ func (w *window) imageRow(c *ui.Context, pal *palette, f *fileState) {
 	pane := func(label string, img *ui.Bitmap, size int, bar ui.Color) {
 		ui.Column(c).Grow(1).Basis(0).MinWidth(0).Padding(14).Gap(8).AlignItems(ui.Center).Children(func() {
 			if img == nil {
-				ui.Text(c, "No "+strings.ToLower(label)+" image").FontSize(12).TextColor(t.TextMuted)
+				ui.Text(c, "No "+strings.ToLower(label)+" image").FontSize(em(c, 12)).TextColor(t.TextMuted)
 				return
 			}
 			iw, ih := img.Size()
@@ -760,7 +760,7 @@ func (w *window) imageRow(c *ui.Context, pal *palette, f *fileState) {
 			})
 			ui.Row(c).Gap(6).Children(func() {
 				ui.Box(c).Size(8, 8).Radius(4).Background(bar)
-				ui.Textf(c, "%s · %d×%d · %s", label, iw, ih, formatBytes(size)).FontSize(11).TextColor(t.TextMuted)
+				ui.Textf(c, "%s · %d×%d · %s", label, iw, ih, formatBytes(size)).FontSize(em(c, 11)).TextColor(t.TextMuted)
 			})
 		})
 	}

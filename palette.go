@@ -211,8 +211,8 @@ func (w *window) palette(c *ui.Context) {
 		panel.Width(560).MaxHeight(440).Radius(16).Background(pal.headerBg).Border(1, pal.cardBorder).
 			Shadow(0, 20, 60, 0, ui.RGBA(0, 0, 0, 0.28)).Clip().Label("Command bar")
 		ui.Row(c).Padding(10, 14).Gap(10).BorderWidth(0, 0, 1, 0).BorderColor(pal.cardBorder).Children(func() {
-			ui.Icon(c, iconCommand).FontSize(16).TextColor(t.TextMuted)
-			input := ui.TextInputBase(c, &w.paletteQuery).Placeholder("Type a command…").Label("Command").FontSize(15).Grow(1).AutoFocus()
+			ui.Icon(c, iconCommand).FontSize(em(c, 16)).TextColor(t.TextMuted)
+			input := ui.TextInputBase(c, &w.paletteQuery).Placeholder("Type a command…").Label("Command").FontSize(em(c, 15)).Grow(1).AutoFocus()
 			if input.Changed() {
 				w.paletteRow = 0
 			}
@@ -242,9 +242,9 @@ func (w *window) palette(c *ui.Context) {
 				run(i)
 			}
 			item.Children(func() {
-				ui.Text(c, cmd.title).FontSize(13).Shrink(0)
+				ui.Text(c, cmd.title).FontSize(em(c, 13)).Shrink(0)
 				if cmd.hint != "" {
-					hint := ui.Text(c, cmd.hint).FontSize(12).SingleLine().Shrink(1).MinWidth(0)
+					hint := ui.Text(c, cmd.hint).FontSize(em(c, 12)).SingleLine().Shrink(1).MinWidth(0)
 					if i != w.paletteRow {
 						hint.TextColor(t.TextMuted)
 					} else {
@@ -253,7 +253,7 @@ func (w *window) palette(c *ui.Context) {
 				}
 				ui.Spacer(c)
 				if cmd.keys != "" {
-					k := ui.Text(c, cmd.keys).FontSize(11).Padding(2, 6).Radius(5).Shrink(0)
+					k := ui.Text(c, cmd.keys).FontSize(em(c, 11)).Padding(2, 6).Radius(5).Shrink(0)
 					if i == w.paletteRow {
 						k.Background(ui.RGBA(255, 255, 255, 0.2))
 					} else {
@@ -263,7 +263,7 @@ func (w *window) palette(c *ui.Context) {
 			})
 		}).Padding(6).MaxHeight(380).Children(func() {
 			if len(cmds) == 0 {
-				ui.Text(c, "No matching commands").FontSize(13).TextColor(t.TextMuted).Padding(12)
+				ui.Text(c, "No matching commands").FontSize(em(c, 13)).TextColor(t.TextMuted).Padding(12)
 			}
 		})
 	})
@@ -318,8 +318,8 @@ func (w *window) sourceDialog(c *ui.Context) {
 	ui.Modal(c, &w.dialogOpen, func() {
 		ui.Column(c).Width(420).Gap(14).Children(func() {
 			ui.Column(c).Gap(4).Children(func() {
-				ui.Text(c, title).FontSize(16).Bold()
-				ui.Text(c, desc).FontSize(13).TextColor(t.TextMuted)
+				ui.Text(c, title).FontSize(em(c, 16)).Bold()
+				ui.Text(c, desc).FontSize(em(c, 13)).TextColor(t.TextMuted)
 			})
 			ui.Field(c, label, func() {
 				if ui.TextInput(c, &w.dialogValue).Placeholder(placeholder).Font(w.codeFont()).AutoFocus().Submitted() {
@@ -359,7 +359,7 @@ func (w *window) shortcutsHelp(c *ui.Context) {
 	ui.Modal(c, &w.help, func() {
 		ui.Column(c).Width(620).Gap(16).Children(func() {
 			ui.Row(c).Children(func() {
-				ui.Text(c, "Keyboard Shortcuts").FontSize(15).Bold().Grow(1)
+				ui.Text(c, "Keyboard Shortcuts").FontSize(em(c, 15)).Bold().Grow(1)
 				if ui.Button(c, "Done").Clicked() {
 					w.help = false
 				}
@@ -367,11 +367,11 @@ func (w *window) shortcutsHelp(c *ui.Context) {
 			ui.Grid(c).Columns(2).GapX(28).GapY(14).Children(func() {
 				for _, g := range groups {
 					ui.Column(c).Gap(4).Children(func() {
-						ui.Text(c, strings.ToUpper(g.title)).FontSize(11).FontWeight(600).LetterSpacing(0.6).TextColor(t.TextMuted)
+						ui.Text(c, strings.ToUpper(g.title)).FontSize(em(c, 11)).FontWeight(600).LetterSpacing(0.6).TextColor(t.TextMuted)
 						for _, k := range g.keys {
 							ui.Row(c).MinHeight(26).Children(func() {
-								ui.Text(c, k[0]).FontSize(13).Grow(1)
-								ui.Text(c, k[1]).FontSize(11).Padding(2, 6).Radius(5).Background(paletteFor(t).pill)
+								ui.Text(c, k[0]).FontSize(em(c, 13)).Grow(1)
+								ui.Text(c, k[1]).FontSize(em(c, 11)).Padding(2, 6).Radius(5).Background(paletteFor(t).pill)
 							})
 						}
 					})

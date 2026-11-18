@@ -161,10 +161,10 @@ const (
 func stackLabel(c *ui.Context, n int, trunk string) {
 	t := c.Theme()
 	ui.Row(c).Gap(6).Padding(6, 8, 3, 8).Children(func() {
-		ui.Icon(c, iconStack).FontSize(12).TextColor(t.TextMuted).Shrink(0)
-		ui.Textf(c, "Stack of %d", n).FontFeatures("tnum").FontSize(11).FontWeight(600).TextColor(t.TextMuted).Shrink(0)
+		ui.Icon(c, iconStack).FontSize(em(c, 12)).TextColor(t.TextMuted).Shrink(0)
+		ui.Textf(c, "Stack of %d", n).FontFeatures("tnum").FontSize(em(c, 11)).FontWeight(600).TextColor(t.TextMuted).Shrink(0)
 		if trunk != "" {
-			ui.Text(c, "onto "+trunk).FontSize(11).TextColor(t.TextMuted.Alpha(0.8)).SingleLine().Shrink(1).MinWidth(0)
+			ui.Text(c, "onto "+trunk).FontSize(em(c, 11)).TextColor(t.TextMuted.Alpha(0.8)).SingleLine().Shrink(1).MinWidth(0)
 		}
 	})
 }
@@ -207,15 +207,15 @@ func (w *window) stackSwitcher(c *ui.Context, pal *palette) {
 	}
 	b.Children(func() {
 		ui.Row(c).Gap(5).Children(func() {
-			ui.Icon(c, iconStack).FontSize(13).TextColor(t.TextMuted)
-			ui.Textf(c, "%d/%d", at+1, len(s.Pulls)).FontFeatures("tnum").FontSize(12).FontWeight(600)
+			ui.Icon(c, iconStack).FontSize(em(c, 13)).TextColor(t.TextMuted)
+			ui.Textf(c, "%d/%d", at+1, len(s.Pulls)).FontFeatures("tnum").FontSize(em(c, 12)).FontWeight(600)
 		})
 	})
 	ui.Popover(c, b, &p.stackOpen, func() {
 		ui.Column(c).Width(420).Gap(2).Padding(4).Children(func() {
 			ui.Row(c).Gap(6).Padding(4, 6, 6).Children(func() {
-				ui.Icon(c, iconStack).FontSize(13).TextColor(t.TextMuted)
-				ui.Textf(c, "Stack of %d pull requests", len(s.Pulls)).FontSize(12).FontWeight(600)
+				ui.Icon(c, iconStack).FontSize(em(c, 13)).TextColor(t.TextMuted)
+				ui.Textf(c, "Stack of %d pull requests", len(s.Pulls)).FontSize(em(c, 12)).FontWeight(600)
 			})
 			// The top of the stack first, the trunk last.
 			for i := len(s.Pulls) - 1; i >= 0; i-- {
@@ -236,26 +236,26 @@ func (w *window) stackSwitcher(c *ui.Context, pal *palette) {
 					if sp.Draft {
 						icon, color = iconPullDraft, t.TextMuted
 					}
-					ui.Icon(c, icon).FontSize(14).TextColor(color).Margin(1, 0, 0).Shrink(0)
+					ui.Icon(c, icon).FontSize(em(c, 14)).TextColor(color).Margin(1, 0, 0).Shrink(0)
 					ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
 						weight := 500
 						if current {
 							weight = 700
 						}
-						ui.Text(c, sp.Title).FontSize(12).FontWeight(weight).SingleLine()
+						ui.Text(c, sp.Title).FontSize(em(c, 12)).FontWeight(weight).SingleLine()
 						ui.RichText(c,
 							ui.Span{Text: fmt.Sprintf("#%d", sp.Number), Color: pal.ref},
 							ui.Span{Text: " · ", Color: t.TextMuted},
 							ui.Span{Text: sp.HeadRef, Font: w.codeFont(), Color: t.TextMuted},
-						).FontSize(11).SingleLine()
+						).FontSize(em(c, 11)).SingleLine()
 					})
 				})
 			}
 			ui.Row(c).Gap(8).Padding(6, 8).Children(func() {
-				ui.Icon(c, iconBranch).FontSize(14).TextColor(t.TextMuted).Shrink(0)
-				ui.Text(c, s.Trunk).Font(w.codeFont()).FontSize(12).TextColor(pal.ref)
+				ui.Icon(c, iconBranch).FontSize(em(c, 14)).TextColor(t.TextMuted).Shrink(0)
+				ui.Text(c, s.Trunk).Font(w.codeFont()).FontSize(em(c, 12)).TextColor(pal.ref)
 			})
-			ui.Text(c, "⇧J and ⇧K move down and up the stack").FontSize(11).TextColor(t.TextMuted).
+			ui.Text(c, "⇧J and ⇧K move down and up the stack").FontSize(em(c, 11)).TextColor(t.TextMuted).
 				Padding(8, 8, 4).BorderWidth(1, 0, 0, 0).BorderColor(pal.cardBorder)
 		})
 	})

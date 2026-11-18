@@ -12,21 +12,29 @@ import (
 )
 
 // uiTheme gives the window the theme of the system with the text in the
-// settings' family, and returns it.
+// settings' family and size, and returns it.
 func (w *window) uiTheme(c *ui.Context) *ui.Theme {
 	t := c.Theme()
 	family := w.settings.UIFontFamily
-	if family == "" || t.Font == family {
+	size := float32(w.settings.UIFontSize)
+	if (family == "" || t.Font == family) && t.FontSize == size {
 		return t
 	}
-	if w.fontTheme == nil || w.fontThemeOf != t || w.fontTheme.Font != family {
+	if w.fontTheme == nil || w.fontThemeOf != t || w.fontTheme.Font != family || w.fontTheme.FontSize != size {
 		ft := *t
-		ft.Font = family
+		if family != "" {
+			ft.Font = family
+		}
+		ft.FontSize = size
 		w.fontTheme, w.fontThemeOf = &ft, t
 	}
 	c.SetTheme(w.fontTheme)
 	return w.fontTheme
 }
+
+// em scales n, a size of the interface's text at its default of 13, to
+// the uiFontSize setting, which the frame's theme carries.
+func em(c *ui.Context, n float32) float32 { return n * c.Theme().FontSize / 13 }
 
 func (w *window) view(c *ui.Context) {
 	if debugFrames {
@@ -125,8 +133,8 @@ func (w *window) toolbar(c *ui.Context, pal *palette) {
 		// The repository: its name, and where it is.
 		if w.repo != nil {
 			ui.Column(c).Gap(1).Shrink(1).MinWidth(0).Tooltip(w.repo.Root).Children(func() {
-				ui.Text(c, filepath.Base(w.repo.Root)).FontSize(13).Bold().SingleLine()
-				ui.Text(c, filepath.Dir(abbreviateHome(w.repo.Root))).FontSize(11).TextColor(t.TextMuted).SingleLine()
+				ui.Text(c, filepath.Base(w.repo.Root)).FontSize(em(c, 13)).Bold().SingleLine()
+				ui.Text(c, filepath.Dir(abbreviateHome(w.repo.Root))).FontSize(em(c, 11)).TextColor(t.TextMuted).SingleLine()
 			})
 		}
 		if w.branch != "" && w.source.kind != sourcePull {
@@ -196,11 +204,11 @@ func (w *window) copyCommentsButton(c *ui.Context, pal *palette, n int, copied b
 	}
 	cb.Children(func() {
 		if copied {
-			ui.Icon(c, iconCheck).FontSize(15).TextColor(pal.viewed)
+			ui.Icon(c, iconCheck).FontSize(em(c, 15)).TextColor(pal.viewed)
 		} else {
-			ui.Icon(c, iconComment).FontSize(15)
+			ui.Icon(c, iconComment).FontSize(em(c, 15))
 		}
-		ui.Textf(c, "%d", n).FontFeatures("tnum").FontSize(11).FontWeight(500)
+		ui.Textf(c, "%d", n).FontFeatures("tnum").FontSize(em(c, 11)).FontWeight(500)
 	})
 }
 
@@ -265,8 +273,8 @@ func (w *window) moreMenu(c *ui.Context, comments int) {
 func chip(c *ui.Context, pal *palette, svg *ui.SVG, label string, color ui.Color) ui.Element {
 	return ui.Row(c).Gap(5).Padding(3, 8).Radius(12).Background(ui.RGBA(127, 127, 127, 0.08)).
 		Border(1, ui.RGBA(127, 127, 127, 0.12)).TextColor(color).Shrink(1).MinWidth(0).MaxWidth(240).Children(func() {
-		ui.Icon(c, svg).FontSize(12)
-		ui.Text(c, label).FontSize(12).FontWeight(600).SingleLine()
+		ui.Icon(c, svg).FontSize(em(c, 12))
+		ui.Text(c, label).FontSize(em(c, 12)).FontWeight(600).SingleLine()
 	})
 }
 
@@ -331,9 +339,9 @@ func (w *window) review(c *ui.Context, pal *palette) bool {
 		ui.Row(c).Justify(ui.Center).Padding(8, 12, 0).Children(func() {
 			ui.Row(c).Gap(6).Padding(5, 6, 5, 12).Radius(16).Background(pal.viewed.Alpha(0.1).Over(pal.codeBg)).
 				Border(1, pal.viewed.Alpha(0.2)).Children(func() {
-				ui.Text(c, "New commits were pushed,").FontSize(13).FontWeight(600).TextColor(pal.viewed.Mix(t.Text, 0.6))
+				ui.Text(c, "New commits were pushed,").FontSize(em(c, 13)).FontWeight(600).TextColor(pal.viewed.Mix(t.Text, 0.6))
 				ref := ui.ButtonBase(c).FocusRing(true).Children(func() {
-					ui.Text(c, "refresh to see them.").FontSize(13).FontWeight(600).Underline().TextColor(pal.viewed.Mix(t.Text, 0.6))
+					ui.Text(c, "refresh to see them.").FontSize(em(c, 13)).FontWeight(600).Underline().TextColor(pal.viewed.Mix(t.Text, 0.6))
 				})
 				if ref.Clicked() {
 					w.refresh()
@@ -432,14 +440,14 @@ func (w *window) commitMessage(c *ui.Context, pal *palette) ui.Element {
 		ui.Row(c).Gap(10).Children(func() {
 			ui.Avatar(c, cm.Author, nil).Size(26, 26)
 			ui.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {
-				ui.Text(c, cm.Subject).FontSize(14).Bold().SingleLine().Selectable()
-				ui.Textf(c, "%s committed %s", cm.Author, relativeTime(w.now, cm.Time)).FontSize(11).TextColor(t.TextMuted).
+				ui.Text(c, cm.Subject).FontSize(em(c, 14)).Bold().SingleLine().Selectable()
+				ui.Textf(c, "%s committed %s", cm.Author, relativeTime(w.now, cm.Time)).FontSize(em(c, 11)).TextColor(t.TextMuted).
 					Tooltip(cm.Email + " · " + cm.Time.Format("Mon Jan 2 15:04:05 2006"))
 			})
-			ui.Text(c, shortHash(cm.Hash)).Font(w.codeFont()).FontSize(12).TextColor(pal.ref).Selectable()
+			ui.Text(c, shortHash(cm.Hash)).Font(w.codeFont()).FontSize(em(c, 12)).TextColor(pal.ref).Selectable()
 		})
 		if cm.Body != "" {
-			ui.Text(c, cm.Body).FontSize(13).Selectable().Padding(4, 0, 0, 36)
+			ui.Text(c, cm.Body).FontSize(em(c, 13)).Selectable().Padding(4, 0, 0, 36)
 		}
 	})
 }
@@ -449,10 +457,10 @@ func emptyPanel(c *ui.Context, pal *palette, title, detail string, actions func(
 	t := c.Theme()
 	ui.Column(c).Grow(1).Center().Padding(24).Children(func() {
 		ui.Column(c).MaxWidth(520).Padding(28).Gap(10).Radius(16).Background(pal.headerBg).AlignItems(ui.Center).Children(func() {
-			ui.Icon(c, iconFileDiff).FontSize(28).TextColor(t.TextMuted)
-			ui.Text(c, title).FontSize(15).Bold().TextAlign(ui.Center)
+			ui.Icon(c, iconFileDiff).FontSize(em(c, 28)).TextColor(t.TextMuted)
+			ui.Text(c, title).FontSize(em(c, 15)).Bold().TextAlign(ui.Center)
 			if detail != "" {
-				ui.Text(c, detail).FontSize(13).TextColor(t.TextMuted).TextAlign(ui.Center).Selectable()
+				ui.Text(c, detail).FontSize(em(c, 13)).TextColor(t.TextMuted).TextAlign(ui.Center).Selectable()
 			}
 			if actions != nil {
 				ui.Row(c).Gap(8).Margin(6, 0, 0).Children(actions)
@@ -472,7 +480,7 @@ func thinking(c *ui.Context, status string) {
 		status = "Thinking…"
 	}
 	ui.Column(c).Grow(1).Center().Children(func() {
-		label := ui.Text(c, status).Italic().FontSize(13).TextColor(t.TextMuted)
+		label := ui.Text(c, status).Italic().FontSize(em(c, 13)).TextColor(t.TextMuted)
 		label.Opacity(0.5 + 0.5*label.Loop("pulse", 1600*time.Millisecond, ui.Bounce(ui.EaseInOut)))
 	})
 }

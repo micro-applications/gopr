@@ -193,13 +193,13 @@ func (w *window) fileTabRow(c *ui.Context, pal *palette) {
 			}
 			tab.Children(func() {
 				if i == 0 {
-					ui.Icon(c, iconFileDiff).FontSize(14)
+					ui.Icon(c, iconFileDiff).FontSize(em(c, 14))
 				} else if f := w.fileByPath(w.fileTabs[i-1].path); f != nil {
 					fileIcon(c, f, 14)
 				} else {
-					ui.Icon(c, iconFile).FontSize(14)
+					ui.Icon(c, iconFile).FontSize(em(c, 14))
 				}
-				text := ui.Text(c, label).FontSize(12).SingleLine()
+				text := ui.Text(c, label).FontSize(em(c, 12)).SingleLine()
 				if on {
 					text.FontWeight(600)
 				}
